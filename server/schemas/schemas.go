@@ -27,3 +27,8 @@ type Medication struct {
 	CreatedAt        string `json:"created_at"`
 	Pfht 			 string `json:"pfht"`
 }
+
+type Coordinates struct {
+	Lat string `json:"lat"`
+	Long string `json:"lon"`
+}

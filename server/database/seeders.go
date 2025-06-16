@@ -6,7 +6,9 @@ import (
 	"fmt"
 	repository "kayena/server/database/generated"
 	"kayena/server/schemas"
+	"kayena/server/services"
 	"os"
+	"time"
 )
 
 func SeedMedications() error {
@@ -53,6 +55,61 @@ func SeedMedications() error {
 		}
 	}
 	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func SeedPharmacies() error {
+	ctx := context.Background()
+	f, err := os.ReadFile("database/data/pharmacies.json")
+	if err != nil {
+		return err
+	}
+
+	var pharmacies []schemas.Pharmacy
+	err = json.Unmarshal(f, &pharmacies)
+	if err != nil {
+		return fmt.Errorf("error unmarshal json :%s", err)
+	}
+	tx, err := DbConn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback(ctx)
+
+	qtx := repository.New(tx)
+
+	for _, phar := range pharmacies {
+		geo, err := services.GetGeoCoordinates(phar)
+		if err != nil {
+			return fmt.Errorf("failed to get coordinates for pharmacy '%s': %w", phar.Name, err)
+		}
+		fmt.Printf("Coordinates for %s: lat %s lon %s ✅\n", phar.Name, geo.Lat, geo.Long)
+		time.Sleep(1 * time.Second)
+		
+		address, err := services.GetAddressByGeo(*geo)
+		if err != nil {
+			return fmt.Errorf("failed to get address for pharmacy '%s' (lat: %s, lon: %s): %w", 
+				phar.Name, geo.Lat, geo.Long, err)
+		}
+		fmt.Printf("Address for %s: %s✅ \n", phar.Name, address)
+		_, err = qtx.CreatePharmacy(ctx, repository.CreatePharmacyParams{
+			Name:      phar.Name,
+			City:      phar.City,
+			Address:   address,
+			Latitude:  geo.Lat,
+			Longitude: geo.Long,
+		})
+		if err != nil {
+			return fmt.Errorf("error creating pharmacy record : %s", err)
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
 		return err
 	}
 	return nil

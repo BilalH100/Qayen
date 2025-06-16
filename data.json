@@ -1,0 +1,34 @@
+{
+    "place_id": 274611748,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 8869796040,
+    "lat": "33.9071824",
+    "lon": "-5.5384993",
+    "category": "amenity",
+    "type": "pharmacy",
+    "place_rank": 30,
+    "importance": 6.176012817573842e-05,
+    "addresstype": "amenity",
+    "name": "صيدلية عين الشبيك",
+    "display_name": "صيدلية عين الشبيك, Zenkat As Sakia Al Hamra, Meknès ⴰⵎⴽⵏⴰⵙ مكناس, Pachalik de Meknes, Prefecture de Meknès عمالة مكناس, Fès-Meknès ⴼⴰⵙ-ⵎⴽⵏⴰⵙ فاس-مكناس, 50000, Maroc ⵍⵎⵖⵔⵉⴱ المغرب",
+    "address": {
+        "amenity": "صيدلية عين الشبيك",
+        "road": "Zenkat As Sakia Al Hamra",
+        "city": "Meknès ⴰⵎⴽⵏⴰⵙ مكناس",
+        "county": "Pachalik de Meknes",
+        "state_district": "Prefecture de Meknès عمالة مكناس",
+        "ISO3166-2-lvl5": "MA-MEK",
+        "region": "Fès-Meknès ⴼⴰⵙ-ⵎⴽⵏⴰⵙ فاس-مكناس",
+        "ISO3166-2-lvl4": "MA-03",
+        "postcode": "50000",
+        "country": "Maroc ⵍⵎⵖⵔⵉⴱ المغرب",
+        "country_code": "ma"
+    },
+    "boundingbox": [
+        "33.9071324",
+        "33.9072324",
+        "-5.5385493",
+        "-5.5384493"
+    ]
+}
