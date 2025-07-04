@@ -34,7 +34,11 @@ CREATE TABLE medications (
   pfht TEXT,
   code TEXT,
   tva TEXT, 
-  created_at TIMESTAMP DEFAULT now()
+  created_at TIMESTAMP DEFAULT now(),
+  description TEXT,
+  common_sd TEXT[],
+  serious_sd TEXT[], 
+  general_info TEXT[]
 );
 
 CREATE TABLE stock (

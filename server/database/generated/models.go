@@ -26,6 +26,10 @@ type Medication struct {
 	Code             string
 	Tva              string
 	CreatedAt        pgtype.Timestamp
+	Description      string
+	CommonSd         []string
+	SeriousSd        []string
+	GeneralInfo      []string
 }
 
 type Pharmacy struct {

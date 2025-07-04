@@ -121,7 +121,7 @@
   {
     "statut_amm": "AMM ENREGISTREE",
     "statut_commercialisation": "Commercialisé AO",
-    "specialite": "AMOXICILLINE LLORENTE",
+    "specialite": "AMOXICILLIN LLORENTE",
     "dosage": "250   MG",
     "forme": "POUDRE POUR SUSPENTION BUVABLE",
     "presentation": "FLACON DE 60 ML",
@@ -138,7 +138,7 @@
   {
     "statut_amm": "AMM ENREGISTREE",
     "statut_commercialisation": "Commercialisé AO",
-    "specialite": "AMOXICILLINE LLORENTE",
+    "specialite": "AMOXICILLIN LLORENTE",
     "dosage": "500   MG",
     "forme": "GELULE",
     "presentation": "BOITE DE 12",
@@ -155,7 +155,7 @@
   {
     "statut_amm": "AMM ENREGISTREE",
     "statut_commercialisation": "Commercialisé AO",
-    "specialite": "AMOXICILLINE LLORENTE",
+    "specialite": "AMOXICILLIN LLORENTE",
     "dosage": "500   MG",
     "forme": "GELULE",
     "presentation": "BOITE DE 24",
@@ -172,7 +172,7 @@
   {
     "statut_amm": "AMM RETIREE",
     "statut_commercialisation": "Retiré du Marché",
-    "specialite": "AMPICILLINE LLORENTE",
+    "specialite": "AMPICILLIN LLORENTE",
     "dosage": "250   MG",
     "forme": "POUDRE POUR SUSPENTION BUVABLE",
     "presentation": "FLACON DE 60 ML",
@@ -189,7 +189,7 @@
   {
     "statut_amm": "AMM ENREGISTREE",
     "statut_commercialisation": "Non Commercialisé",
-    "specialite": "AMPICILLINE LLORENTE",
+    "specialite": "AMPICILLIN LLORENTE",
     "dosage": "500   MG",
     "forme": "GELULE",
     "presentation": "BOITE DE 12",
@@ -206,7 +206,7 @@
   {
     "statut_amm": "AMM ENREGISTREE",
     "statut_commercialisation": "Non Commercialisé",
-    "specialite": "AMPICILLINE LLORENTE",
+    "specialite": "AMPICILLIN LLORENTE",
     "dosage": "500   MG",
     "forme": "GELULE",
     "presentation": "BOITE DE 24",
@@ -223,7 +223,7 @@
   {
     "statut_amm": "AMM RETIREE",
     "statut_commercialisation": "Retiré du Marché",
-    "specialite": "AMPICILLINE LLORENTE",
+    "specialite": "AMPICILLIN LLORENTE",
     "dosage": "500   MG",
     "forme": "POUDRE POUR PREPARATION INJECTABLE",
     "presentation": "BOITE DE 1 AMPOULE",

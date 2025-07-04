@@ -13,10 +13,10 @@ const createMedication = `-- name: CreateMedication :one
 INSERT INTO medications (
   status, commercial_status, speciality, dosage,
   form, presentation, pp, active_substance, therapeutic_class,
-  epi, ppv, ph, pfht, code, tva
+  epi, ppv, ph, pfht, code, tva, description, common_sd, serious_sd
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-RETURNING id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+RETURNING id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info
 `
 
 type CreateMedicationParams struct {
@@ -35,6 +35,9 @@ type CreateMedicationParams struct {
 	Pfht             string
 	Code             string
 	Tva              string
+	Description      string
+	CommonSd         []string
+	SeriousSd        []string
 }
 
 func (q *Queries) CreateMedication(ctx context.Context, arg CreateMedicationParams) (Medication, error) {
@@ -54,6 +57,9 @@ func (q *Queries) CreateMedication(ctx context.Context, arg CreateMedicationPara
 		arg.Pfht,
 		arg.Code,
 		arg.Tva,
+		arg.Description,
+		arg.CommonSd,
+		arg.SeriousSd,
 	)
 	var i Medication
 	err := row.Scan(
@@ -74,6 +80,10 @@ func (q *Queries) CreateMedication(ctx context.Context, arg CreateMedicationPara
 		&i.Code,
 		&i.Tva,
 		&i.CreatedAt,
+		&i.Description,
+		&i.CommonSd,
+		&i.SeriousSd,
+		&i.GeneralInfo,
 	)
 	return i, err
 }
@@ -88,7 +98,7 @@ func (q *Queries) DeleteMedication(ctx context.Context, id int32) error {
 }
 
 const getMedicationByCode = `-- name: GetMedicationByCode :one
-SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at FROM medications WHERE code = $1
+SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info FROM medications WHERE code = $1
 `
 
 func (q *Queries) GetMedicationByCode(ctx context.Context, code string) (Medication, error) {
@@ -112,12 +122,16 @@ func (q *Queries) GetMedicationByCode(ctx context.Context, code string) (Medicat
 		&i.Code,
 		&i.Tva,
 		&i.CreatedAt,
+		&i.Description,
+		&i.CommonSd,
+		&i.SeriousSd,
+		&i.GeneralInfo,
 	)
 	return i, err
 }
 
 const getMedicationByID = `-- name: GetMedicationByID :one
-SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at FROM medications WHERE id = $1
+SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info FROM medications WHERE id = $1
 `
 
 func (q *Queries) GetMedicationByID(ctx context.Context, id int32) (Medication, error) {
@@ -141,12 +155,16 @@ func (q *Queries) GetMedicationByID(ctx context.Context, id int32) (Medication, 
 		&i.Code,
 		&i.Tva,
 		&i.CreatedAt,
+		&i.Description,
+		&i.CommonSd,
+		&i.SeriousSd,
+		&i.GeneralInfo,
 	)
 	return i, err
 }
 
 const listMedications = `-- name: ListMedications :many
-SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at FROM medications ORDER BY speciality
+SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info FROM medications ORDER BY speciality
 `
 
 func (q *Queries) ListMedications(ctx context.Context) ([]Medication, error) {
@@ -176,6 +194,10 @@ func (q *Queries) ListMedications(ctx context.Context) ([]Medication, error) {
 			&i.Code,
 			&i.Tva,
 			&i.CreatedAt,
+			&i.Description,
+			&i.CommonSd,
+			&i.SeriousSd,
+			&i.GeneralInfo,
 		); err != nil {
 			return nil, err
 		}
@@ -192,9 +214,10 @@ UPDATE medications
 SET
   status = $2, commercial_status = $3, speciality = $4, dosage = $5,
   form = $6, presentation = $7, pp = $8, active_substance = $9,
-  therapeutic_class = $10, epi = $11, ppv = $12, ph = $13, pfht = $14, code = $15, tva = $16
+  therapeutic_class = $10, epi = $11, ppv = $12, ph = $13, pfht = $14, code = $15, tva = $16, description = $17, 
+  common_sd = $18, serious_sd = $19
 WHERE id = $1
-RETURNING id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at
+RETURNING id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info
 `
 
 type UpdateMedicationParams struct {
@@ -214,6 +237,9 @@ type UpdateMedicationParams struct {
 	Pfht             string
 	Code             string
 	Tva              string
+	Description      string
+	CommonSd         []string
+	SeriousSd        []string
 }
 
 func (q *Queries) UpdateMedication(ctx context.Context, arg UpdateMedicationParams) (Medication, error) {
@@ -234,6 +260,9 @@ func (q *Queries) UpdateMedication(ctx context.Context, arg UpdateMedicationPara
 		arg.Pfht,
 		arg.Code,
 		arg.Tva,
+		arg.Description,
+		arg.CommonSd,
+		arg.SeriousSd,
 	)
 	var i Medication
 	err := row.Scan(
@@ -254,6 +283,10 @@ func (q *Queries) UpdateMedication(ctx context.Context, arg UpdateMedicationPara
 		&i.Code,
 		&i.Tva,
 		&i.CreatedAt,
+		&i.Description,
+		&i.CommonSd,
+		&i.SeriousSd,
+		&i.GeneralInfo,
 	)
 	return i, err
 }

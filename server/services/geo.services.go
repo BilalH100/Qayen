@@ -7,66 +7,74 @@ import (
 	"kayena/server/schemas"
 	"net/http"
 	"net/url"
+	"os"
 )
 
+var apiKey = os.Getenv("MAPS_API_KEY") 
+
 func GetGeoCoordinates(phar schemas.Pharmacy) (*schemas.Coordinates, error) {
-	url := fmt.Sprintf("https://nominatim.openstreetmap.org/search?q=%s&polygon_geojson=1&format=jsonv2",
-		url.QueryEscape(fmt.Sprintf("%s %s", phar.Name, phar.City)))
-	fmt.Println("GEO URL : ", url)
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	resp, err := client.Do(req)
+	baseURL := "https://maps.googleapis.com/maps/api/geocode/json"
+	query := fmt.Sprintf("%s %s", phar.Name, phar.City)
+	params := url.Values{}
+	params.Add("address", query)
+	params.Add("key", apiKey)
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	fmt.Println("GEO URL:", fullURL)
+
+	resp, err := http.Get(fullURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API returned non-200 status code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("API returned non-200 status: %d", resp.StatusCode)
 	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	var m []map[string]interface{}
-	err = json.Unmarshal(body, &m)
+
+	var res struct {
+		Results []struct {
+			Geometry struct {
+				Location struct {
+					Lat float64 `json:"lat"`
+					Lng float64 `json:"lng"`
+				} `json:"location"`
+			} `json:"geometry"`
+		} `json:"results"`
+		Status string `json:"status"`
+	}
+
+	err = json.Unmarshal(body, &res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
-	if len(m) == 0 {
-		return nil, fmt.Errorf("no results found for query")
-	}
-	lat, ok := m[0]["lat"].(string)
-	if !ok {
-		return nil, fmt.Errorf("latitude not found in response")
-	}
-	long, ok := m[0]["lon"].(string)
-	if !ok {
-		return nil, fmt.Errorf("longitude not found in response")
+
+	if res.Status != "OK" || len(res.Results) == 0 {
+		return nil, fmt.Errorf("no results found or API returned status: %s", res.Status)
 	}
 
 	c := &schemas.Coordinates{
-		Lat:  lat,
-		Long: long,
+		Lat:  fmt.Sprintf("%f", res.Results[0].Geometry.Location.Lat),
+		Long: fmt.Sprintf("%f", res.Results[0].Geometry.Location.Lng),
 	}
 	return c, nil
 }
 
 func GetAddressByGeo(c schemas.Coordinates) (string, error) {
-	url := fmt.Sprintf("https://nominatim.openstreetmap.org/reverse?lat=%s&lon=%s&format=jsonv2", c.Lat, c.Long)
-	fmt.Println("ADDRESS URL :", url)
+	baseURL := "https://maps.googleapis.com/maps/api/geocode/json"
+	params := url.Values{}
+	params.Add("latlng", fmt.Sprintf("%s,%s", c.Lat, c.Long))
+	params.Add("key", os.Getenv("GOOGLE_MAPS_API_KEY"))
 
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	// req.Header.Set("User-Agent", "kayena") 
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	fmt.Println("ADDRESS URL:", fullURL)
 
-	resp, err := client.Do(req)
+	resp, err := http.Get(fullURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
@@ -80,19 +88,21 @@ func GetAddressByGeo(c schemas.Coordinates) (string, error) {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var m map[string]interface{}
-	err = json.Unmarshal(body, &m)
+	var res struct {
+		Results []struct {
+			FormattedAddress string `json:"formatted_address"`
+		} `json:"results"`
+		Status string `json:"status"`
+	}
+
+	err = json.Unmarshal(body, &res)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse JSON response: %w", err)
 	}
 
-	address, ok := m["address"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("address field not found in response")
+	if res.Status != "OK" || len(res.Results) == 0 {
+		return "", fmt.Errorf("no results found or API returned status: %s", res.Status)
 	}
-	road, ok := address["road"].(string)
-	if !ok {
-		return "", fmt.Errorf("road field not found in address")
-	}
-	return road, nil
+
+	return res.Results[0].FormattedAddress, nil
 }

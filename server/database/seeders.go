@@ -18,6 +18,7 @@ func SeedMedications() error {
 	}
 
 	var medications []schemas.Medication
+	var e schemas.Failed
 	err = json.Unmarshal(f, &medications)
 	if err != nil {
 		return fmt.Errorf("error unmarshl json :%s", err)
@@ -29,11 +30,14 @@ func SeedMedications() error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-
 	qtx := repository.New(tx)
 
 	for _, med := range medications {
-		_, err := qtx.CreateMedication(ctx, repository.CreateMedicationParams{
+		description, sideEff, err := services.GetMetaData(med.Speciality, &e)
+		if err != nil {
+			return fmt.Errorf("error getting med description : %s", err)
+		}
+		_, err = qtx.CreateMedication(ctx, repository.CreateMedicationParams{
 			Status:           med.Status,
 			CommercialStatus: med.CommercialStatus,
 			Speciality:       med.Speciality,
@@ -49,11 +53,15 @@ func SeedMedications() error {
 			Code:             med.Code,
 			Pfht:             med.Pfht,
 			Tva:              med.Tva,
+			Description:      description,
+			CommonSd:         sideEff.Common,
+			SeriousSd:        sideEff.Serious,
 		})
 		if err != nil {
 			return fmt.Errorf("error creating med record: %s", err)
 		}
 	}
+	fmt.Printf("FAILED TO GET DESCRIPTION FOR %v Medications \n", e)
 	if err = tx.Commit(ctx); err != nil {
 		return err
 	}
@@ -88,10 +96,10 @@ func SeedPharmacies() error {
 		}
 		fmt.Printf("Coordinates for %s: lat %s lon %s ✅\n", phar.Name, geo.Lat, geo.Long)
 		time.Sleep(1 * time.Second)
-		
+
 		address, err := services.GetAddressByGeo(*geo)
 		if err != nil {
-			return fmt.Errorf("failed to get address for pharmacy '%s' (lat: %s, lon: %s): %w", 
+			return fmt.Errorf("failed to get address for pharmacy '%s' (lat: %s, lon: %s): %w",
 				phar.Name, geo.Lat, geo.Long, err)
 		}
 		fmt.Printf("Address for %s: %s✅ \n", phar.Name, address)

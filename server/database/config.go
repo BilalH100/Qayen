@@ -50,16 +50,16 @@ func SeedDatabase() error {
 		return fmt.Errorf("seed check error : error getting medication : %s", err)
 	}
 	fmt.Println("medications already seeded skipping ...")
-	_, err = Queries.GetPharmacyByID(ctx, 1)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows){
-			fmt.Println("Seeding Pharmacies ...")
-			err = SeedPharmacies()
-			if err != nil {
-				return fmt.Errorf("error seeding pharmacies : %s", err)
-			}
-		}
-		return fmt.Errorf("seed check error : error getting pharmacy: %s", err)
-	}
+	// _, err = Queries.GetPharmacyByID(ctx, 1)
+	// if err != nil {
+	// 	if errors.Is(err, pgx.ErrNoRows){
+	// 		fmt.Println("Seeding Pharmacies ...")
+	// 		err = SeedPharmacies()
+	// 		if err != nil {
+	// 			return fmt.Errorf("error seeding pharmacies : %s", err)
+	// 		}
+	// 	}
+	// 	return fmt.Errorf("seed check error : error getting pharmacy: %s", err)
+	// }
 	return nil
 }

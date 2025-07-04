@@ -25,10 +25,20 @@ type Medication struct {
 	Code             string `json:"code"`
 	Tva              string `json:"tva"`
 	CreatedAt        string `json:"created_at"`
-	Pfht 			 string `json:"pfht"`
+	Pfht             string `json:"pfht"`
 }
 
 type Coordinates struct {
-	Lat string `json:"lat"`
+	Lat  string `json:"lat"`
 	Long string `json:"lon"`
+}
+
+type Failed struct {
+	Desc int
+	Side int
+}
+
+type SideEffects struct {
+	Common  []string
+	Serious []string
 }
