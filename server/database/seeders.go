@@ -8,74 +8,116 @@ import (
 	"kayena/server/schemas"
 	"kayena/server/services"
 	"os"
+	"sync"
 	"time"
 )
 
 func SeedMedications() error {
+	var (
+		medications []schemas.Medication
+		failedMeds  []string
+		mu          sync.Mutex
+	)
+
 	f, err := os.ReadFile("database/data/medications.json")
 	if err != nil {
-		return err
+		return fmt.Errorf("error reading medications.json: %w", err)
 	}
 
-	var medications []schemas.Medication
-	var e schemas.Failed
-	err = json.Unmarshal(f, &medications)
-	if err != nil {
-		return fmt.Errorf("error unmarshl json :%s", err)
+	if err := json.Unmarshal(f, &medications); err != nil {
+		return fmt.Errorf("error unmarshalling json: %w", err)
 	}
 
 	ctx := context.Background()
 	tx, err := DbConn.Begin(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("error starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
 	qtx := repository.New(tx)
 
+	const lim = 10
+	sem := make(chan struct{}, lim)
+	var wg sync.WaitGroup
+
+	errorsChan := make(chan error, len(medications))
+
 	for _, med := range medications {
-		description, sideEff, err := services.GetMetaData(med.Speciality, &e)
-		if err != nil {
-			return fmt.Errorf("error getting med description : %s", err)
-		}
-		_, err = qtx.CreateMedication(ctx, repository.CreateMedicationParams{
-			Status:           med.Status,
-			CommercialStatus: med.CommercialStatus,
-			Speciality:       med.Speciality,
-			Dosage:           med.Dosage,
-			Form:             med.Form,
-			Presentation:     med.Presentation,
-			Pp:               med.Pp,
-			ActiveSubstance:  med.ActiveSubstance,
-			TherapeuticClass: med.TherapeuticClass,
-			Epi:              med.Epi,
-			Ppv:              med.Ppv,
-			Ph:               med.Ph,
-			Code:             med.Code,
-			Pfht:             med.Pfht,
-			Tva:              med.Tva,
-			Description:      description,
-			CommonSd:         sideEff.Common,
-			SeriousSd:        sideEff.Serious,
-		})
-		if err != nil {
-			return fmt.Errorf("error creating med record: %s", err)
-		}
+		med := med
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			description, sideEff, err := services.GetMetaData(med.Speciality, nil)
+			if err != nil {
+				mu.Lock()
+				failedMeds = append(failedMeds, med.Speciality)
+				mu.Unlock()
+				return
+			}
+
+			_, err = qtx.CreateMedication(ctx, repository.CreateMedicationParams{
+				Status:           med.Status,
+				CommercialStatus: med.CommercialStatus,
+				Speciality:       med.Speciality,
+				Dosage:           med.Dosage,
+				Form:             med.Form,
+				Presentation:     med.Presentation,
+				Pp:               med.Pp,
+				ActiveSubstance:  med.ActiveSubstance,
+				TherapeuticClass: med.TherapeuticClass,
+				Epi:              med.Epi,
+				Ppv:              med.Ppv,
+				Ph:               med.Ph,
+				Code:             med.Code,
+				Pfht:             med.Pfht,
+				Tva:              med.Tva,
+				Description:      description,
+				CommonSd:         sideEff.Common,
+				SeriousSd:        sideEff.Serious,
+			})
+			if err != nil {
+				errorsChan <- fmt.Errorf("error creating medication %s: %w", med.Speciality, err)
+				return
+			}
+		}()
 	}
-	fmt.Printf("FAILED TO GET DESCRIPTION FOR %v Medications \n", e)
-	if err = tx.Commit(ctx); err != nil {
-		return err
+
+	wg.Wait()
+	close(errorsChan)
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
 	}
+
+	for err := range errorsChan {
+		fmt.Println(err)
+	}
+
+	if len(failedMeds) > 0 {
+		fmt.Printf("Failed to get metadata for %d medications: %v\n", len(failedMeds), failedMeds)
+	}
+
 	return nil
 }
 
 func SeedPharmacies() error {
 	ctx := context.Background()
-	f, err := os.ReadFile("database/data/pharmacies.json")
+
+	var (
+		pharmacies []schemas.Pharmacy
+		err        error
+		f          []byte
+	)
+	f, err = os.ReadFile("database/data/pharmacies.json")
 	if err != nil {
 		return err
 	}
 
-	var pharmacies []schemas.Pharmacy
 	err = json.Unmarshal(f, &pharmacies)
 	if err != nil {
 		return fmt.Errorf("error unmarshal json :%s", err)

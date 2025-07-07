@@ -11,8 +11,6 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/bregydoc/gtranslate"
-	"golang.org/x/text/language"
 )
 
 func GetMetaData(drugName string, e *schemas.Failed) (string, schemas.SideEffects, error) {
@@ -31,21 +29,19 @@ func GetMetaData(drugName string, e *schemas.Failed) (string, schemas.SideEffect
 }
 
 func getDescription(dn string) (string, error) {
-	var desc string
-	if desc, err := getFromWikipedia(dn); err == nil && desc != "" {
+	var (
+		desc string
+		err  error
+	)
+
+	if desc, err = getFromWikipedia(dn); err == nil && desc != "" {
 		return desc, nil
 	}
-	if desc, err := getFromDrugs(dn); err == nil && desc != "" {
+	if desc, err = getFromDrugs(dn); err == nil && desc != "" {
 		return desc, nil
 	}
-	french, err := getFromMedicamentMA(dn)
-	if err != nil {
-		fmt.Println("Failed getting description")
-	} else {
-		desc, err = gtranslate.Translate(french, language.French, language.English)
-		if err != nil {
-			return french, fmt.Errorf("(fr) %s\n(translation failed: %w)", french, err)
-		}
+	if desc, err := getFromMedicamentMA(dn); err == nil && desc != "" {
+		return desc, nil
 	}
 	return desc, nil
 }
