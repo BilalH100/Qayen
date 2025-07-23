@@ -42,3 +42,25 @@ type SideEffects struct {
 	Common  []string
 	Serious []string
 }
+
+type CreateUserRequest struct {
+	Email    string `json:"email" validate:"required,email"`
+	Name     string `json:"name"  validate:"required"`
+	Phone    string `json:"phone" validate:"required,min=10"`
+	Password string `json:"password" validate:"required,min=6"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email" validate:"required, email"`
+	Password string `json:"password" validate:"required,min=6"`
+}
+
+type Message struct {
+	Message string `json:"message" validate:"required"`
+}
+
+type GetUserResponse struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Phone string `json:"phone"`
+}

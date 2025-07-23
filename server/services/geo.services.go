@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-var apiKey = os.Getenv("MAPS_API_KEY") 
+var apiKey = os.Getenv("MAPS_API_KEY")
 
 func GetGeoCoordinates(phar schemas.Pharmacy) (*schemas.Coordinates, error) {
 	baseURL := "https://maps.googleapis.com/maps/api/geocode/json"

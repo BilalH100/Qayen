@@ -3,6 +3,7 @@ CREATE TABLE users (
   email TEXT UNIQUE NOT NULL,
   name TEXT,
   phone TEXT,
+  password TEXT,
   created_at TIMESTAMP DEFAULT now()
 );
 

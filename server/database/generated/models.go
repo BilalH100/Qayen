@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.29.0
 
-package repository
+package sqlc
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"
@@ -56,5 +56,6 @@ type User struct {
 	Email     string
 	Name      string
 	Phone     string
+	Password  string
 	CreatedAt pgtype.Timestamp
 }

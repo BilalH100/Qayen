@@ -29,13 +29,6 @@ func SeedMedications() error {
 	}
 
 	ctx := context.Background()
-	tx, err := DbConn.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("error starting transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	qtx := repository.New(tx)
 
 	const lim = 10
 	sem := make(chan struct{}, lim)
@@ -60,7 +53,7 @@ func SeedMedications() error {
 				return
 			}
 
-			_, err = qtx.CreateMedication(ctx, repository.CreateMedicationParams{
+			_, err = Queries.CreateMedication(ctx, repository.CreateMedicationParams{
 				Status:           med.Status,
 				CommercialStatus: med.CommercialStatus,
 				Speciality:       med.Speciality,
@@ -89,10 +82,6 @@ func SeedMedications() error {
 
 	wg.Wait()
 	close(errorsChan)
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("error committing transaction: %w", err)
-	}
 
 	for err := range errorsChan {
 		fmt.Println(err)

@@ -1,14 +1,22 @@
-import { ArrowLeft, ShoppingCart, Heart, Share2, MapPin, Check, AlertCircle } from "lucide-react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { MedicationCard } from "@/components/medication-card"
+import {
+  ArrowLeft,
+  ShoppingCart,
+  Heart,
+  Share2,
+  MapPin,
+  Check,
+  AlertCircle,
+} from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { MedicationCard } from "@/components/medication-card";
 
 interface MedicationPageProps {
   params: {
-    slug: string
-  }
+    speciality: string;
+  };
 }
 
 export default function MedicationPage({ params }: MedicationPageProps) {
@@ -21,7 +29,8 @@ export default function MedicationPage({ params }: MedicationPageProps) {
     price: 9.99,
     description:
       "This medication is used to relieve pain from various conditions such as headache, dental pain, menstrual cramps, muscle aches, or arthritis. It may also be used to reduce fever.",
-    dosage: "Take 1-2 tablets every 4-6 hours as needed. Do not exceed 6 tablets in 24 hours.",
+    dosage:
+      "Take 1-2 tablets every 4-6 hours as needed. Do not exceed 6 tablets in 24 hours.",
     sideEffects:
       "Upset stomach, mild heartburn, nausea, vomiting, headache, diarrhea, constipation, dizziness, or drowsiness may occur.",
     warnings:
@@ -32,7 +41,7 @@ export default function MedicationPage({ params }: MedicationPageProps) {
       "/placeholder.svg?height=400&width=400",
       "/placeholder.svg?height=400&width=400",
     ],
-  }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -58,9 +67,13 @@ export default function MedicationPage({ params }: MedicationPageProps) {
         <div>
           <Badge className="mb-2 bg-teal-600">{medication.category}</Badge>
           <h1 className="text-3xl font-bold mb-2">{medication.name}</h1>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white mb-4">${medication.price.toFixed(2)}</div>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+            ${medication.price.toFixed(2)}
+          </div>
 
-          <p className="text-slate-600 dark:text-slate-300 mb-6">{medication.description}</p>
+          <p className="text-slate-600 dark:text-slate-300 mb-6">
+            {medication.description}
+          </p>
 
           {medication.inStock ? (
             <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400 mb-6">
@@ -95,7 +108,10 @@ export default function MedicationPage({ params }: MedicationPageProps) {
             <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 mb-4">
               <MapPin className="h-4 w-4" />
               <span>New York, NY 10001</span>
-              <Button variant="link" className="p-0 h-auto text-teal-600 dark:text-teal-400">
+              <Button
+                variant="link"
+                className="p-0 h-auto text-teal-600 dark:text-teal-400"
+              >
                 Change
               </Button>
             </div>
@@ -103,21 +119,33 @@ export default function MedicationPage({ params }: MedicationPageProps) {
               <div className="flex justify-between items-center p-3 border rounded-lg">
                 <div>
                   <div className="font-medium">MediCare Plus</div>
-                  <div className="text-sm text-slate-500 dark:text-slate-400">0.8 miles away</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    0.8 miles away
+                  </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold">${medication.price.toFixed(2)}</div>
-                  <div className="text-sm text-green-600 dark:text-green-400">In Stock</div>
+                  <div className="font-bold">
+                    ${medication.price.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-green-600 dark:text-green-400">
+                    In Stock
+                  </div>
                 </div>
               </div>
               <div className="flex justify-between items-center p-3 border rounded-lg">
                 <div>
                   <div className="font-medium">Wellness Pharmacy</div>
-                  <div className="text-sm text-slate-500 dark:text-slate-400">1.2 miles away</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    1.2 miles away
+                  </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold">${(medication.price + 0.5).toFixed(2)}</div>
-                  <div className="text-sm text-green-600 dark:text-green-400">In Stock</div>
+                  <div className="font-bold">
+                    ${(medication.price + 0.5).toFixed(2)}
+                  </div>
+                  <div className="text-sm text-green-600 dark:text-green-400">
+                    In Stock
+                  </div>
                 </div>
               </div>
             </div>
@@ -134,7 +162,9 @@ export default function MedicationPage({ params }: MedicationPageProps) {
         </TabsList>
         <TabsContent value="details" className="p-6 border rounded-b-lg">
           <h3 className="text-xl font-semibold mb-4">Product Details</h3>
-          <p className="text-slate-600 dark:text-slate-300">{medication.description}</p>
+          <p className="text-slate-600 dark:text-slate-300">
+            {medication.description}
+          </p>
           <ul className="list-disc list-inside mt-4 space-y-2 text-slate-600 dark:text-slate-300">
             <li>Active ingredient: Ibuprofen 200mg</li>
             <li>Non-steroidal anti-inflammatory drug (NSAID)</li>
@@ -144,18 +174,24 @@ export default function MedicationPage({ params }: MedicationPageProps) {
         </TabsContent>
         <TabsContent value="dosage" className="p-6 border rounded-b-lg">
           <h3 className="text-xl font-semibold mb-4">Recommended Dosage</h3>
-          <p className="text-slate-600 dark:text-slate-300">{medication.dosage}</p>
+          <p className="text-slate-600 dark:text-slate-300">
+            {medication.dosage}
+          </p>
           <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded-lg">
-            <h4 className="font-semibold text-yellow-800 dark:text-yellow-400 mb-2">Important Note</h4>
+            <h4 className="font-semibold text-yellow-800 dark:text-yellow-400 mb-2">
+              Important Note
+            </h4>
             <p className="text-yellow-700 dark:text-yellow-300 text-sm">
-              Always follow your doctor's instructions or the directions on the label. Do not take more than the
-              recommended dose.
+              Always follow your doctor's instructions or the directions on the
+              label. Do not take more than the recommended dose.
             </p>
           </div>
         </TabsContent>
         <TabsContent value="side-effects" className="p-6 border rounded-b-lg">
           <h3 className="text-xl font-semibold mb-4">Possible Side Effects</h3>
-          <p className="text-slate-600 dark:text-slate-300 mb-4">{medication.sideEffects}</p>
+          <p className="text-slate-600 dark:text-slate-300 mb-4">
+            {medication.sideEffects}
+          </p>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-4 border rounded-lg">
               <h4 className="font-semibold mb-2">Common Side Effects</h4>
@@ -179,18 +215,25 @@ export default function MedicationPage({ params }: MedicationPageProps) {
         </TabsContent>
         <TabsContent value="warnings" className="p-6 border rounded-b-lg">
           <h3 className="text-xl font-semibold mb-4">Warnings & Precautions</h3>
-          <p className="text-slate-600 dark:text-slate-300 mb-4">{medication.warnings}</p>
+          <p className="text-slate-600 dark:text-slate-300 mb-4">
+            {medication.warnings}
+          </p>
           <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg mb-4">
-            <h4 className="font-semibold text-red-800 dark:text-red-400 mb-2">Do not use if:</h4>
+            <h4 className="font-semibold text-red-800 dark:text-red-400 mb-2">
+              Do not use if:
+            </h4>
             <ul className="list-disc list-inside space-y-1 text-red-700 dark:text-red-300 text-sm">
               <li>You are allergic to ibuprofen or any other NSAID</li>
-              <li>You have had asthma, hives, or other allergic reactions after taking aspirin or other NSAIDs</li>
+              <li>
+                You have had asthma, hives, or other allergic reactions after
+                taking aspirin or other NSAIDs
+              </li>
               <li>You are about to have heart surgery</li>
             </ul>
           </div>
           <p className="text-slate-600 dark:text-slate-300">
-            Ask a doctor before use if you have stomach problems, heart disease, high blood pressure, or other medical
-            conditions.
+            Ask a doctor before use if you have stomach problems, heart disease,
+            high blood pressure, or other medical conditions.
           </p>
         </TabsContent>
       </Tabs>
@@ -230,5 +273,5 @@ export default function MedicationPage({ params }: MedicationPageProps) {
         </div>
       </section>
     </div>
-  )
+  );
 }

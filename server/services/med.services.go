@@ -33,16 +33,16 @@ func getDescription(dn string) (string, error) {
 		desc string
 		err  error
 	)
-
-	if desc, err = getFromWikipedia(dn); err == nil && desc != "" {
-		return desc, nil
-	}
 	if desc, err = getFromDrugs(dn); err == nil && desc != "" {
 		return desc, nil
 	}
 	if desc, err := getFromMedicamentMA(dn); err == nil && desc != "" {
 		return desc, nil
 	}
+	if desc, err = getFromWikipedia(dn); err == nil && desc != "" {
+		return desc, nil
+	}
+
 	return desc, nil
 }
 func getSideEffects(dn string) (schemas.SideEffects, error) {

@@ -3,7 +3,7 @@
 //   sqlc v1.29.0
 // source: medications.sql
 
-package repository
+package sqlc
 
 import (
 	"context"

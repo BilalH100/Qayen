@@ -1,9 +1,15 @@
-import { Search, Filter } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { MedicationCard } from "@/components/medication-card"
-import { CategoryPill } from "@/components/category-pill"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Search, Filter } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { MedicationCard } from "@/components/medication-card";
+import { CategoryPill } from "@/components/category-pill";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function MedicationsPage() {
   return (
@@ -45,11 +51,11 @@ export default function MedicationsPage() {
         </div>
       </div>
       <div className="flex flex-wrap gap-3 mb-8">
-        <CategoryPill  label="All" count={1024} />
-        <CategoryPill  label="Pain Relief" count={124} />
-        <CategoryPill  label="Antibiotics" count={86} />
-        <CategoryPill  label="Vitamins" count={210} />
-        <CategoryPill  label="Diabetes" count={75} />
+        <CategoryPill label="All" count={1024} />
+        <CategoryPill label="Pain Relief" count={124} />
+        <CategoryPill label="Antibiotics" count={86} />
+        <CategoryPill label="Vitamins" count={210} />
+        <CategoryPill label="Diabetes" count={75} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -117,7 +123,11 @@ export default function MedicationsPage() {
           <Button variant="outline" size="icon" disabled>
             &lt;
           </Button>
-          <Button variant="outline" size="icon" className="bg-teal-600 text-white">
+          <Button
+            variant="outline"
+            size="icon"
+            className="bg-teal-600 text-white"
+          >
             1
           </Button>
           <Button variant="outline" size="icon">
@@ -132,5 +142,5 @@ export default function MedicationsPage() {
         </nav>
       </div>
     </div>
-  )
+  );
 }

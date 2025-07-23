@@ -1,30 +1,41 @@
 package main
 
 import (
+	"kayena/server/config"
 	"kayena/server/database"
-	"log"
-	"os"
+	repository "kayena/server/database/generated"
+	"kayena/server/http/routes"
+	"kayena/server/utils"
+	"net/http"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/joho/godotenv"
+	"github.com/K44Z/golog"
 )
 
 func main() {
-	err := godotenv.Load()
+	var err error
+
+	logger := utils.InitLogger()
+	cfg, err := config.Load()
 	if err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
-	PORT := os.Getenv("PORT")
-	err = database.ConnectDb()
+
+	db, err := database.ConnectDb(cfg)
 	if err != nil {
-		log.Fatal("Error connecting to the database :", err)
+		logger.Fatal("Connection to Db failed: ", err)
 	}
-	log.Println("Database connected ✅")
-	app := fiber.New()
-	app.Use(logger.New())
-	err = app.Listen(PORT)
+
+	repo := repository.New(db)
+
+	router := routes.NewRouter()
+	server := http.Server{
+		Handler: golog.Log(router),
+		Addr:    cfg.Port,
+	}
+
+	logger.Infof("Server listening on port %s", cfg.Port)
+	err = server.ListenAndServe()
 	if err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 }

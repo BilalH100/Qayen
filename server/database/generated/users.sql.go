@@ -3,32 +3,39 @@
 //   sqlc v1.29.0
 // source: users.sql
 
-package repository
+package sqlc
 
 import (
 	"context"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, name, phone)
-VALUES ($1, $2, $3)
-RETURNING id, email, name, phone, created_at
+INSERT INTO users (email, name, phone, password)
+VALUES ($1, $2, $3, $4)
+RETURNING id, email, name, phone, password, created_at
 `
 
 type CreateUserParams struct {
-	Email string
-	Name  string
-	Phone string
+	Email    string
+	Name     string
+	Phone    string
+	Password string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Name, arg.Phone)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.Name,
+		arg.Phone,
+		arg.Password,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.Phone,
+		&i.Password,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -44,7 +51,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int32) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, phone, created_at FROM users WHERE email = $1
+SELECT id, email, name, phone, password, created_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -55,13 +62,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.Name,
 		&i.Phone,
+		&i.Password,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, name, phone, created_at FROM users WHERE id = $1
+SELECT id, email, name, phone, password, created_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
@@ -72,13 +80,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.Email,
 		&i.Name,
 		&i.Phone,
+		&i.Password,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, phone, created_at FROM users ORDER BY id
+SELECT id, email, name, phone, password, created_at FROM users ORDER BY id
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -95,6 +104,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Email,
 			&i.Name,
 			&i.Phone,
+			&i.Password,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -111,7 +121,7 @@ const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET name = $2, phone = $3
 WHERE id = $1
-RETURNING id, email, name, phone, created_at
+RETURNING id, email, name, phone, password, created_at
 `
 
 type UpdateUserParams struct {
@@ -128,6 +138,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Email,
 		&i.Name,
 		&i.Phone,
+		&i.Password,
 		&i.CreatedAt,
 	)
 	return i, err
