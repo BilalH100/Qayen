@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	repository "kayena/server/database/generated"
+	"kayena/server/models"
 	"kayena/server/schemas"
 	"kayena/server/services"
 	"os"
@@ -12,9 +13,9 @@ import (
 	"time"
 )
 
-func SeedMedications() error {
+func SeedMedications(ctx context.Context, s services.MedService) error {
 	var (
-		medications []schemas.Medication
+		medications []models.Medication
 		failedMeds  []string
 		mu          sync.Mutex
 	)
@@ -27,8 +28,6 @@ func SeedMedications() error {
 	if err := json.Unmarshal(f, &medications); err != nil {
 		return fmt.Errorf("error unmarshalling json: %w", err)
 	}
-
-	ctx := context.Background()
 
 	const lim = 10
 	sem := make(chan struct{}, lim)
@@ -53,7 +52,7 @@ func SeedMedications() error {
 				return
 			}
 
-			_, err = Queries.CreateMedication(ctx, repository.CreateMedicationParams{
+			err = s.CreateMedication(ctx, models.Medication{
 				Status:           med.Status,
 				CommercialStatus: med.CommercialStatus,
 				Speciality:       med.Speciality,
@@ -79,7 +78,6 @@ func SeedMedications() error {
 			}
 		}()
 	}
-
 	wg.Wait()
 	close(errorsChan)
 

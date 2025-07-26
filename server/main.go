@@ -3,8 +3,8 @@ package main
 import (
 	"kayena/server/config"
 	"kayena/server/database"
-	repository "kayena/server/database/generated"
 	"kayena/server/http/routes"
+	"kayena/server/services"
 	"kayena/server/utils"
 	"net/http"
 
@@ -15,25 +15,28 @@ func main() {
 	var err error
 
 	logger := utils.InitLogger()
-	cfg, err := config.Load()
+	c, err := config.Load()
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	db, err := database.ConnectDb(cfg)
+	db, err := database.ConnectDb(c)
 	if err != nil {
 		logger.Fatal("Connection to Db failed: ", err)
 	}
-
-	repo := repository.New(db)
-
-	router := routes.NewRouter()
-	server := http.Server{
-		Handler: golog.Log(router),
-		Addr:    cfg.Port,
+	service := services.NewService(db)
+	err = database.SeedDb(service)
+	if err != nil {
+		logger.Fatal(err)
 	}
 
-	logger.Infof("Server listening on port %s", cfg.Port)
+	router := routes.NewRouter(service)
+	server := http.Server{
+		Handler: golog.Log(router),
+		Addr:    c.Port,
+	}
+
+	logger.Infof("Server listening on port %s", c.Port)
 	err = server.ListenAndServe()
 	if err != nil {
 		logger.Fatal(err)

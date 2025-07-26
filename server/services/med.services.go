@@ -1,9 +1,13 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	sqlc "kayena/server/database/generated"
+	"kayena/server/models"
+	"kayena/server/repository"
 	"kayena/server/schemas"
 	"log"
 	"net/http"
@@ -13,13 +17,96 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+type MedService interface {
+	CreateMedication(ctx context.Context, med models.Medication) error
+	UpdateMedication(ctx context.Context, med models.Medication) (*models.Medication, error)
+	DeleteMedication(ctx context.Context, id int32) error
+	GetMedicationByCode(ctx context.Context, code string) (*models.Medication, error)
+	GetMedicationById(ctx context.Context, id int32) (*models.Medication, error)
+	GetAllMedications(ctx context.Context, opt schemas.Options) ([]models.Medication, error)
+}
+
+type medService struct {
+	medRepo repository.MedRepository
+}
+
+func NewMedService(medRepo repository.MedRepository) MedService {
+	return &medService{
+		medRepo: medRepo,
+	}
+}
+
+func (s *medService) CreateMedication(ctx context.Context, med models.Medication) error {
+	m := sqlc.CreateMedicationParams{
+		Code:             med.Code,
+		Status:           med.Status,
+		CommercialStatus: med.CommercialStatus,
+		Speciality:       med.Speciality,
+		Dosage:           med.Dosage,
+		Form:             med.Form,
+		Presentation:     med.Presentation,
+		Pp:               med.Pp,
+		ActiveSubstance:  med.ActiveSubstance,
+		TherapeuticClass: med.TherapeuticClass,
+		Epi:              med.Epi,
+		Ppv:              med.Ppv,
+		Ph:               med.Ph,
+		Pfht:             med.Pfht,
+		Tva:              med.Tva,
+		Description:      med.Description,
+		CommonSd:         med.CommonSd,
+		SeriousSd:        med.SeriousSd,
+		GeneralInfo:      med.GeneralInfo,
+	}
+	return s.medRepo.Create(ctx, m)
+}
+
+func (s *medService) UpdateMedication(ctx context.Context, med models.Medication) (*models.Medication, error) {
+	return s.medRepo.Update(ctx, sqlc.UpdateMedicationParams{
+		Code:             med.Code,
+		Status:           med.Status,
+		CommercialStatus: med.CommercialStatus,
+		Speciality:       med.Speciality,
+		Dosage:           med.Dosage,
+		Form:             med.Form,
+		Presentation:     med.Presentation,
+		Pp:               med.Pp,
+		ActiveSubstance:  med.ActiveSubstance,
+		TherapeuticClass: med.TherapeuticClass,
+		Epi:              med.Epi,
+		Ppv:              med.Ppv,
+		Ph:               med.Ph,
+		Pfht:             med.Pfht,
+		Tva:              med.Tva,
+		Description:      med.Description,
+		CommonSd:         med.CommonSd,
+		SeriousSd:        med.SeriousSd,
+		GeneralInfo:      med.GeneralInfo,
+	})
+}
+
+func (s *medService) DeleteMedication(ctx context.Context, id int32) error {
+	return s.medRepo.Delete(ctx, id)
+}
+
+func (s *medService) GetMedicationByCode(ctx context.Context, code string) (*models.Medication, error) {
+	return s.medRepo.GetByCode(ctx, code)
+}
+func (s *medService) GetMedicationById(ctx context.Context, id int32) (*models.Medication, error) {
+	return s.medRepo.GetByID(ctx, id)
+}
+
+func (s *medService) GetAllMedications(ctx context.Context, opt schemas.Options) ([]models.Medication, error) {
+	return s.medRepo.GetAll(ctx, opt)
+}
+
 func GetMetaData(drugName string, e *schemas.Failed) (string, schemas.SideEffects, error) {
-	d, err := getDescription(drugName)
+	d, err := GetDescription(drugName)
 	if err != nil {
 		e.Desc += 1
 		log.Println("Error getting description for :", drugName)
 	}
-	sd, err := getSideEffects(drugName)
+	sd, err := GetSideEffects(drugName)
 	if err != nil {
 		e.Side += 1
 		log.Println("Erro getting side effects for :", drugName)
@@ -28,24 +115,24 @@ func GetMetaData(drugName string, e *schemas.Failed) (string, schemas.SideEffect
 	return d, sd, nil
 }
 
-func getDescription(dn string) (string, error) {
+func GetDescription(dn string) (string, error) {
 	var (
 		desc string
 		err  error
 	)
-	if desc, err = getFromDrugs(dn); err == nil && desc != "" {
+	if desc, err = GetFromDrugs(dn); err == nil && desc != "" {
 		return desc, nil
 	}
-	if desc, err := getFromMedicamentMA(dn); err == nil && desc != "" {
+	if desc, err := GetFromMedicamentMA(dn); err == nil && desc != "" {
 		return desc, nil
 	}
-	if desc, err = getFromWikipedia(dn); err == nil && desc != "" {
+	if desc, err = GetFromWikipedia(dn); err == nil && desc != "" {
 		return desc, nil
 	}
 
 	return desc, nil
 }
-func getSideEffects(dn string) (schemas.SideEffects, error) {
+func GetSideEffects(dn string) (schemas.SideEffects, error) {
 	page := url.PathEscape(strings.ToLower(strings.ReplaceAll(dn, " ", "_")))
 	apiURL := fmt.Sprintf("https://www.drugs.com/search.php?searchterm=%s", page)
 	doc, err := goquery.NewDocument(apiURL)
@@ -101,7 +188,7 @@ func getSideEffects(dn string) (schemas.SideEffects, error) {
 	}, nil
 }
 
-func getFromWikipedia(drugName string) (string, error) {
+func GetFromWikipedia(drugName string) (string, error) {
 	page := url.PathEscape(strings.ToLower(strings.ReplaceAll(drugName, " ", "_")))
 	apiURL := fmt.Sprintf("https://en.wikipedia.org/api/rest_v1/page/summary/%s", page)
 	fmt.Println("wiki :", apiURL)
@@ -131,7 +218,7 @@ func getFromWikipedia(drugName string) (string, error) {
 	return strings.TrimSpace(data.Extract), nil
 }
 
-func getFromDrugs(drugName string) (string, error) {
+func GetFromDrugs(drugName string) (string, error) {
 	page := url.PathEscape(strings.ToLower(strings.ReplaceAll(drugName, " ", "_")))
 	apiURL := fmt.Sprintf("https://www.drugs.com/search.php?searchterm=%s", page)
 	fmt.Println("drugs.com :", apiURL)
@@ -155,7 +242,7 @@ func getFromDrugs(drugName string) (string, error) {
 	return description, nil
 }
 
-func getFromMedicamentMA(drugName string) (string, error) {
+func GetFromMedicamentMA(drugName string) (string, error) {
 	slug := strings.ToLower(strings.ReplaceAll(drugName, " ", "-"))
 	url := fmt.Sprintf("https://medicament.ma/medicament/%s", slug)
 	fmt.Println("med.ma :", url)

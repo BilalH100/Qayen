@@ -9,14 +9,13 @@ import (
 	"context"
 )
 
-const createMedication = `-- name: CreateMedication :one
+const createMedication = `-- name: CreateMedication :exec
 INSERT INTO medications (
   status, commercial_status, speciality, dosage,
   form, presentation, pp, active_substance, therapeutic_class,
-  epi, ppv, ph, pfht, code, tva, description, common_sd, serious_sd
+  epi, ppv, ph, pfht, code, tva, description, common_sd, serious_sd, general_info
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-RETURNING id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 `
 
 type CreateMedicationParams struct {
@@ -38,10 +37,11 @@ type CreateMedicationParams struct {
 	Description      string
 	CommonSd         []string
 	SeriousSd        []string
+	GeneralInfo      []string
 }
 
-func (q *Queries) CreateMedication(ctx context.Context, arg CreateMedicationParams) (Medication, error) {
-	row := q.db.QueryRow(ctx, createMedication,
+func (q *Queries) CreateMedication(ctx context.Context, arg CreateMedicationParams) error {
+	_, err := q.db.Exec(ctx, createMedication,
 		arg.Status,
 		arg.CommercialStatus,
 		arg.Speciality,
@@ -60,32 +60,9 @@ func (q *Queries) CreateMedication(ctx context.Context, arg CreateMedicationPara
 		arg.Description,
 		arg.CommonSd,
 		arg.SeriousSd,
+		arg.GeneralInfo,
 	)
-	var i Medication
-	err := row.Scan(
-		&i.ID,
-		&i.Status,
-		&i.CommercialStatus,
-		&i.Speciality,
-		&i.Dosage,
-		&i.Form,
-		&i.Presentation,
-		&i.Pp,
-		&i.ActiveSubstance,
-		&i.TherapeuticClass,
-		&i.Epi,
-		&i.Ppv,
-		&i.Ph,
-		&i.Pfht,
-		&i.Code,
-		&i.Tva,
-		&i.CreatedAt,
-		&i.Description,
-		&i.CommonSd,
-		&i.SeriousSd,
-		&i.GeneralInfo,
-	)
-	return i, err
+	return err
 }
 
 const deleteMedication = `-- name: DeleteMedication :exec
@@ -163,6 +140,59 @@ func (q *Queries) GetMedicationByID(ctx context.Context, id int32) (Medication, 
 	return i, err
 }
 
+const getMedications = `-- name: GetMedications :many
+SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info FROM medications
+ORDER BY id
+LIMIT $1 OFFSET $2
+`
+
+type GetMedicationsParams struct {
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) GetMedications(ctx context.Context, arg GetMedicationsParams) ([]Medication, error) {
+	rows, err := q.db.Query(ctx, getMedications, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Medication
+	for rows.Next() {
+		var i Medication
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.CommercialStatus,
+			&i.Speciality,
+			&i.Dosage,
+			&i.Form,
+			&i.Presentation,
+			&i.Pp,
+			&i.ActiveSubstance,
+			&i.TherapeuticClass,
+			&i.Epi,
+			&i.Ppv,
+			&i.Ph,
+			&i.Pfht,
+			&i.Code,
+			&i.Tva,
+			&i.CreatedAt,
+			&i.Description,
+			&i.CommonSd,
+			&i.SeriousSd,
+			&i.GeneralInfo,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMedications = `-- name: ListMedications :many
 SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info FROM medications ORDER BY speciality
 `
@@ -215,7 +245,7 @@ SET
   status = $2, commercial_status = $3, speciality = $4, dosage = $5,
   form = $6, presentation = $7, pp = $8, active_substance = $9,
   therapeutic_class = $10, epi = $11, ppv = $12, ph = $13, pfht = $14, code = $15, tva = $16, description = $17, 
-  common_sd = $18, serious_sd = $19
+  common_sd = $18, serious_sd = $19, general_info = $20
 WHERE id = $1
 RETURNING id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info
 `
@@ -240,6 +270,7 @@ type UpdateMedicationParams struct {
 	Description      string
 	CommonSd         []string
 	SeriousSd        []string
+	GeneralInfo      []string
 }
 
 func (q *Queries) UpdateMedication(ctx context.Context, arg UpdateMedicationParams) (Medication, error) {
@@ -263,6 +294,7 @@ func (q *Queries) UpdateMedication(ctx context.Context, arg UpdateMedicationPara
 		arg.Description,
 		arg.CommonSd,
 		arg.SeriousSd,
+		arg.GeneralInfo,
 	)
 	var i Medication
 	err := row.Scan(

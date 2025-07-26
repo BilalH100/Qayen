@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kayena/server/config"
+	"kayena/server/services"
 
 	"errors"
 
@@ -26,13 +27,13 @@ func ConnectDb(c *config.Config) (*pgxpool.Pool, error) {
 	return DbConn, nil
 }
 
-func SeedDatabase() error {
+func SeedDb(s *services.Services) error {
 	ctx := context.Background()
-	_, err := Queries.GetMedicationByCode(ctx, "1")
+	_, err := s.MedService.GetMedicationByCode(ctx, "1")
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			fmt.Println("Seeding meds ...")
-			err = SeedMedications()
+			err = SeedMedications(ctx, s.MedService)
 			if err != nil {
 				return fmt.Errorf("error seeding medications : %s", err)
 			}
