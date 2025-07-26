@@ -127,22 +127,36 @@ func UpdateMedicationHandler(s services.MedService) http.HandlerFunc {
 func GetMedicationsHandler(s services.MedService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var (
-			limit  int32
-			offset int32
+			limit  int64
+			offset int64
+			err    error
 		)
 
 		limitStr := r.URL.Query().Get("limit")
 		offsetStr := r.URL.Query().Get("offset")
 		if limitStr == "" {
 			limit = 100
+		} else {
+			limit, err = strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				httpx.RespondWithError(w, err)
+				return
+			}
 		}
 		if offsetStr == "" {
 			offset = 10
+		} else {
+			offset, err = strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				httpx.RespondWithError(w, err)
+				return
+			}
 		}
 		meds, err := s.GetAllMedications(r.Context(), schemas.Options{
-			Limit:  limit,
-			Offset: offset,
+			Limit:  int32(limit),
+			Offset: int32(offset),
 		})
+
 		if err != nil {
 			httpx.RespondWithError(w, err)
 			return

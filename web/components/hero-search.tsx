@@ -7,20 +7,30 @@ import { Search, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/contexts/auth-context"
 
 export function HeroSearch() {
   const [searchType, setSearchType] = useState<"medication" | "pharmacy">("medication")
   const [location, setLocation] = useState("")
   const [query, setQuery] = useState("")
+  const { user, isAuthenticated } = useAuth()
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log(`Searching for ${searchType}: ${query} in ${location}`)
-    // Implement actual search functionality
+    console.log(`Searching for ${searchType}: ${query} in ${location}`) 
   }
 
   return (
-    <form onSubmit={handleSearch} className="flex flex-col gap-3 md:flex-row">
+    <div className="space-y-4">
+      {isAuthenticated && user && (
+        <div className="mb-4">
+          <p className="text-lg text-slate-600 dark:text-slate-300">
+            Welcome back, <span className="font-semibold text-teal-600">{user.name.split(' ')[0]}</span>!
+          </p>
+        </div>
+      )}
+      
+      <form onSubmit={handleSearch} className="flex flex-col gap-3 md:flex-row">
       <div className="relative flex-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -53,5 +63,6 @@ export function HeroSearch() {
         <Search className="mr-2 h-4 w-4" />Search
       </Button>
     </form>
+    </div>
   )
 }
