@@ -10,11 +10,13 @@ import (
 
 func NewRouter(s *services.Services) http.Handler {
 	router := chi.NewRouter()
+
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			return true
+		},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -23,5 +25,6 @@ func NewRouter(s *services.Services) http.Handler {
 		r.Mount("/users", UserRouter(s.UserService))
 		r.Mount("/meds", MedRouter(s.MedService))
 	})
+
 	return router
 }

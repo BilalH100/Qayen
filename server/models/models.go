@@ -47,9 +47,14 @@ type Stock struct {
 
 type User struct {
 	ID        int32            `json:"id"`
-	Password  string           `json:"assword"`
+	Password  string           `json:"password"`
 	Email     string           `json:"email"`
 	Name      string           `json:"name"`
 	Phone     string           `json:"phone"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
+}
+
+type Category struct {
+	ID   int32  `json:"id"`
+	Name string `json:"name"`
 }

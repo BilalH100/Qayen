@@ -8,6 +8,7 @@ import (
 	"kayena/server/models"
 	"kayena/server/schemas"
 	"kayena/server/services"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -15,11 +16,12 @@ import (
 
 func SeedMedications(ctx context.Context, s services.MedService) error {
 	var (
-		medications []models.Medication
+		medications []schemas.MedicationJson
 		failedMeds  []string
 		mu          sync.Mutex
+		start       time.Time
 	)
-
+	start = time.Now()
 	f, err := os.ReadFile("database/data/medications.json")
 	if err != nil {
 		return fmt.Errorf("error reading medications.json: %w", err)
@@ -28,12 +30,17 @@ func SeedMedications(ctx context.Context, s services.MedService) error {
 	if err := json.Unmarshal(f, &medications); err != nil {
 		return fmt.Errorf("error unmarshalling json: %w", err)
 	}
+	log.Println("the length of the medications is :", len(medications))
+	if len(medications) == 0 {
+		return fmt.Errorf("The length of medications is 0")
+	}
 
-	const lim = 10
+	const lim = 100
 	sem := make(chan struct{}, lim)
 	var wg sync.WaitGroup
 
 	errorsChan := make(chan error, len(medications))
+	e := &schemas.Failed{}
 
 	for _, med := range medications {
 		med := med
@@ -43,8 +50,8 @@ func SeedMedications(ctx context.Context, s services.MedService) error {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-
-			description, sideEff, err := services.GetMetaData(med.Speciality, nil)
+			fmt.Println("Getting metadata for :", med)
+			description, sideEff, err := services.GetMetaData(med.Speciality, e)
 			if err != nil {
 				mu.Lock()
 				failedMeds = append(failedMeds, med.Speciality)
@@ -87,6 +94,7 @@ func SeedMedications(ctx context.Context, s services.MedService) error {
 
 	if len(failedMeds) > 0 {
 		fmt.Printf("Failed to get metadata for %d medications: %v\n", len(failedMeds), failedMeds)
+		fmt.Println("Time taken :", time.Since(start))
 	}
 
 	return nil

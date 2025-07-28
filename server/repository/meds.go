@@ -14,6 +14,7 @@ type MedRepository interface {
 	GetByCode(ctx context.Context, code string) (*models.Medication, error)
 	Update(ctx context.Context, med sqlc.UpdateMedicationParams) (*models.Medication, error)
 	GetAll(ctx context.Context, options schemas.Options) ([]models.Medication, error)
+	GetCategories(ctx context.Context) ([]models.Category, error)
 }
 
 type sqlcMedRepo struct {
@@ -155,4 +156,19 @@ func (s *sqlcMedRepo) GetAll(ctx context.Context, options schemas.Options) ([]mo
 		})
 	}
 	return meds, nil
+}
+
+func (s *sqlcMedRepo) GetCategories(ctx context.Context) ([]models.Category, error) {
+	var categories []models.Category
+	cat, err := s.queries.GetCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range cat {
+		categories = append(categories, models.Category{
+			ID:   c.ID,
+			Name: c.Name,
+		})
+	}
+	return categories, nil
 }

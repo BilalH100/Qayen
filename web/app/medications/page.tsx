@@ -1,9 +1,8 @@
 "use client";
-import { Search, Filter } from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MedicationCard } from "@/components/medication-card";
-import { CategoryPill } from "@/components/category-pill";
 import {
   Select,
   SelectContent,
@@ -15,6 +14,30 @@ import axios from "axios";
 import { BASE_URL } from "@/utils/api";
 import React, { useEffect, useState, useCallback } from "react";
 
+interface Medication {
+  id: number;
+  status: string;
+  commercial_status: string;
+  speciality: string;
+  dosage: string;
+  form: string;
+  presentation: string;
+  pp: string;
+  active_substance: string;
+  therapeutic_class: string;
+  epi: string;
+  ppv: string;
+  ph: string;
+  code: string;
+  tva: string;
+  created_at: string;
+  pfht: string;
+  description: string;
+  common_sd: string[];
+  serious_sd: string[];
+  general_info: string[];
+}
+
 export default function MedicationsPage() {
   const [meds, setMeds] = React.useState<Medication[] | null>([]);
   const [allMeds, setAllMeds] = React.useState<Medication[] | null>([]);
@@ -22,21 +45,18 @@ export default function MedicationsPage() {
   const [totalPages, setTotalPages] = React.useState(1);
   const [loading, setLoading] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
-  const [filteredMeds, setFilteredMeds] = React.useState<Medication[] | null>(
-    [],
-  );
+  const [filteredMeds, setFilteredMeds] = React.useState<Medication[] | null>([]);
+  const [sortBy, setSortBy] = React.useState("relevance");
+  const [selectedCategory, setSelectedCategory] = React.useState("all");
   const itemsPerPage = 20;
 
   const fetchMedications = async (page: number = 1) => {
     try {
       setLoading(true);
       const offset = (page - 1) * itemsPerPage;
-      console.log("offset :", offset);
-      console.log("items per page :", itemsPerPage);
       const response = await axios.get(
         `${BASE_URL}/meds/all?offset=${offset}&limit=${itemsPerPage}`,
       );
-      console.log("response: ", response);
 
       if (!response.data || response.data.length === 0) {
         setMeds([]);
@@ -66,9 +86,7 @@ export default function MedicationsPage() {
   const fetchAllMedications = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${BASE_URL}/meds/all?offset=0&limit=10000`,
-      );
+      const response = await axios.get(`${BASE_URL}/meds/all?offset=0&limit=10000`);
       if (response.data && response.data.length > 0) {
         setAllMeds(response.data);
         return response.data;
@@ -80,6 +98,30 @@ export default function MedicationsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle sorting
+  const handleSort = (medications: Medication[]) => {
+    if (!medications) return medications;
+    
+    const sorted = [...medications];
+    switch (sortBy) {
+      case "name-asc":
+        return sorted.sort((a, b) => a.speciality.localeCompare(b.speciality));
+      case "name-desc":
+        return sorted.sort((a, b) => b.speciality.localeCompare(a.speciality));
+      default:
+        return sorted;
+    }
+  };
+
+  // Handle category filtering
+  const handleCategoryFilter = (medications: Medication[]) => {
+    if (!medications || selectedCategory === "all") return medications;
+    
+    return medications.filter(med => 
+      med.therapeutic_class?.toLowerCase().includes(selectedCategory.toLowerCase())
+    );
   };
 
   const debouncedSearch = useCallback(
@@ -102,21 +144,75 @@ export default function MedicationsPage() {
     }
 
     if (allMeds && allMeds.length > 0) {
-      const filtered = allMeds.filter(
+      let filtered = allMeds.filter(
         (med) =>
           med.speciality?.toLowerCase().includes(term.toLowerCase()) ||
-          med.active_Substance?.toLowerCase().includes(term.toLowerCase()) ||
+          med.active_substance?.toLowerCase().includes(term.toLowerCase()) ||
           med.therapeutic_class?.toLowerCase().includes(term.toLowerCase()) ||
           med.form?.toLowerCase().includes(term.toLowerCase()) ||
           med.presentation?.toLowerCase().includes(term.toLowerCase()) ||
           med.code?.toLowerCase().includes(term.toLowerCase()),
       );
+      
+      // Apply category filter
+      filtered = handleCategoryFilter(filtered);
+      
+      // Apply sorting
+      filtered = handleSort(filtered);
+      
       setFilteredMeds(filtered);
       const totalFilteredPages = Math.ceil(filtered.length / itemsPerPage);
       setTotalPages(totalFilteredPages || 1);
       setCurrentPage(1);
       const firstPageFiltered = filtered.slice(0, itemsPerPage);
       setMeds(firstPageFiltered);
+    }
+  };
+
+  // Handle category change
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    setCurrentPage(1);
+    
+    if (searchTerm) {
+      handleSearch(searchTerm);
+    } else {
+      // Apply filter to current medications
+      if (allMeds && allMeds.length > 0) {
+        let filtered = handleCategoryFilter(allMeds);
+        filtered = handleSort(filtered);
+        
+        const totalFilteredPages = Math.ceil(filtered.length / itemsPerPage);
+        setTotalPages(totalFilteredPages || 1);
+        
+        const firstPageFiltered = filtered.slice(0, itemsPerPage);
+        setMeds(firstPageFiltered);
+        setFilteredMeds(filtered);
+      }
+    }
+  };
+
+  // Handle sort change
+  const handleSortChange = (sort: string) => {
+    setSortBy(sort);
+    
+    if (searchTerm) {
+      handleSearch(searchTerm);
+    } else if (filteredMeds && filteredMeds.length > 0) {
+      const sorted = handleSort(filteredMeds);
+      setFilteredMeds(sorted);
+      const firstPageSorted = sorted.slice(0, itemsPerPage);
+      setMeds(firstPageSorted);
+    } else if (allMeds && allMeds.length > 0) {
+      let filtered = handleCategoryFilter(allMeds);
+      filtered = handleSort(filtered);
+      
+      const totalFilteredPages = Math.ceil(filtered.length / itemsPerPage);
+      setTotalPages(totalFilteredPages || 1);
+      
+      const firstPageFiltered = filtered.slice(0, itemsPerPage);
+      setMeds(firstPageFiltered);
+      setFilteredMeds(filtered);
     }
   };
 
@@ -139,11 +235,12 @@ export default function MedicationsPage() {
       const pageData = filteredMeds.slice(startIndex, endIndex);
       setMeds(pageData);
       setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     fetchMedications(1);
     fetchAllMedications();
   }, []);
@@ -151,6 +248,7 @@ export default function MedicationsPage() {
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages && page !== currentPage) {
       window.scrollTo({ top: 0, behavior: "smooth" });
+      
       if (searchTerm) {
         handleSearchPagination(page);
       } else {
@@ -197,37 +295,35 @@ export default function MedicationsPage() {
           />
         </div>
         <div className="flex gap-2">
-          <Select defaultValue="all">
+          <Select value={selectedCategory} onValueChange={handleCategoryChange}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="pain-relief">Pain Relief</SelectItem>
+              <SelectItem value="pain relief">Pain Relief</SelectItem>
               <SelectItem value="antibiotics">Antibiotics</SelectItem>
               <SelectItem value="vitamins">Vitamins</SelectItem>
               <SelectItem value="diabetes">Diabetes</SelectItem>
+              <SelectItem value="cardiovascular">Cardiovascular</SelectItem>
+              <SelectItem value="dermatology">Dermatology</SelectItem>
             </SelectContent>
           </Select>
-          <Select defaultValue="relevance">
+          <Select value={sortBy} onValueChange={handleSortChange}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="relevance">Relevance</SelectItem>
-              <SelectItem value="price-low">Price: Low to High</SelectItem>
-              <SelectItem value="price-high">Price: High to Low</SelectItem>
               <SelectItem value="name-asc">Name: A to Z</SelectItem>
+              <SelectItem value="name-desc">Name: Z to A</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon">
-            <Filter className="h-4 w-4" />
-          </Button>
         </div>
       </div>
+      
       <div className="flex flex-wrap gap-3 mb-8">
-        <CategoryPill label="All" count={1024} />
-        {searchTerm && (
+        {searchTerm ? (
           <div className="flex items-center gap-2 px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm">
             Searching for: "{searchTerm}"
             <button
@@ -240,7 +336,17 @@ export default function MedicationsPage() {
               ✕
             </button>
           </div>
-        )}
+        ) : selectedCategory !== "all" ? (
+          <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+            Category: {selectedCategory}
+            <button
+              onClick={() => handleCategoryChange("all")}
+              className="ml-1 text-blue-600 hover:text-blue-800"
+            >
+              ✕
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -255,11 +361,13 @@ export default function MedicationsPage() {
           meds.map((med) => (
             <MedicationCard
               key={med.id}
-              name={med.speciality.toLowerCase()}
-              image="/placeholder.svg?height=200&width=200"
-              category="Pain Relief"
-              price={9.99}
-              inStock={true}
+              id={med.id}
+              name={med.speciality}
+              category={med.therapeutic_class}
+              form={med.form}
+              presentation={med.presentation}
+              status={med.status}
+              code={med.code}
             />
           ))
         ) : (
@@ -269,34 +377,33 @@ export default function MedicationsPage() {
         )}
       </div>
 
+      {/* Pagination */}
       <div className="flex justify-center mt-12">
         <nav className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
+          <Button 
+            variant="outline" 
+            size="icon" 
             disabled={currentPage === 1 || loading}
             onClick={() => handlePageChange(currentPage - 1)}
           >
             &lt;
           </Button>
-
+          
           {generatePageNumbers().map((pageNum) => (
             <Button
               key={pageNum}
               variant="outline"
               size="icon"
-              className={
-                currentPage === pageNum ? "bg-teal-600 text-white" : ""
-              }
+              className={currentPage === pageNum ? "bg-teal-600 text-white" : ""}
               onClick={() => handlePageChange(pageNum)}
               disabled={loading}
             >
               {pageNum}
             </Button>
           ))}
-
-          <Button
-            variant="outline"
+          
+          <Button 
+            variant="outline" 
             size="icon"
             disabled={currentPage === totalPages || loading}
             onClick={() => handlePageChange(currentPage + 1)}
@@ -306,16 +413,15 @@ export default function MedicationsPage() {
         </nav>
       </div>
 
+      {/* Page Info */}
       <div className="text-center mt-4 text-sm text-slate-600">
         {searchTerm ? (
           <>
-            Page {currentPage} of {totalPages} • Showing {meds?.length || 0} of{" "}
-            {filteredMeds?.length || 0} search results
+            Page {currentPage} of {totalPages} • Showing {meds?.length || 0} of {filteredMeds?.length || 0} search results
           </>
         ) : (
           <>
-            Page {currentPage} of {totalPages} • Showing {meds?.length || 0}{" "}
-            medications
+            Page {currentPage} of {totalPages} • Showing {meds?.length || 0} medications
           </>
         )}
       </div>

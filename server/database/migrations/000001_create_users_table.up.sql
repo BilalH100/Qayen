@@ -7,6 +7,11 @@ CREATE TABLE users (
   created_at TIMESTAMP DEFAULT now()
 );
 
+CREATE TABLE category (
+  id SERIAL PRIMARY KEY,
+  name TEXT
+);
+
 CREATE TABLE pharmacies (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -39,7 +44,9 @@ CREATE TABLE medications (
   description TEXT,
   common_sd TEXT[],
   serious_sd TEXT[], 
-  general_info TEXT[]
+  general_info TEXT[],
+  category_id INTEGER,
+  FOREIGN KEY (category_id) REFERENCES category(id) ON DELETE CASCADE
 );
 
 CREATE TABLE stock (
@@ -50,4 +57,5 @@ CREATE TABLE stock (
   updated_at TIMESTAMP DEFAULT now(),
   UNIQUE (pharmacy_id, medication_id)
 );
+
 

@@ -32,3 +32,6 @@ DELETE FROM medications WHERE id = $1;
 SELECT * FROM medications
 ORDER BY id
 LIMIT $1 OFFSET $2;
+
+-- name: GetCategories :many 
+SELECT DISTINCT * FROM category;

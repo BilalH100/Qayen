@@ -1,5 +1,23 @@
 package schemas
 
+type MedicationJson struct {
+	ID               int32  `json:"id"`
+	Status           string `json:"statut_amm"`
+	CommercialStatus string `json:"statut_commercialisation"`
+	Speciality       string `json:"specialite"`
+	Dosage           string `json:"dosage"`
+	Form             string `json:"forme"`
+	Presentation     string `json:"presentation"`
+	Pp               string `json:"pp_gn"`
+	ActiveSubstance  string `json:"substance_active"`
+	TherapeuticClass string `json:"classe_therapeutique"`
+	Epi              string `json:"epi"`
+	Ppv              string `json:"ppv"`
+	Ph               string `json:"ph"`
+	Code             string `json:"code"`
+	Tva              string `json:"tva"`
+	Pfht             string `json:"pfht"`
+}
 type Pharmacy struct {
 	Name      string  `json:"nom"`
 	City      string  `json:"ville"`
@@ -62,6 +80,7 @@ type Message struct {
 }
 
 type GetUserResponse struct {
+	Id    int32  `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
 	Phone string `json:"phone"`
@@ -70,4 +89,9 @@ type GetUserResponse struct {
 type Options struct {
 	Limit  int32 `json:"limit"`
 	Offset int32 `json:"offset"`
+}
+
+type LoginResponse struct {
+	Token string          `json:"token"`
+	User  GetUserResponse `json:"user"`
 }

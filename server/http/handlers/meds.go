@@ -165,3 +165,14 @@ func GetMedicationsHandler(s services.MedService) http.HandlerFunc {
 		httpx.RespondWithJSON(w, http.StatusOK, meds)
 	}
 }
+
+func GetMedsCategories(s services.MedService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cat, err := s.GetAllCategories(r.Context())
+		if err != nil {
+			httpx.RespondWithError(w, err)
+			return
+		}
+		httpx.RespondWithJSON(w, http.StatusOK, cat)
+	}
+}

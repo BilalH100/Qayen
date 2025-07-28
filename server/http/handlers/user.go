@@ -9,6 +9,7 @@ import (
 	"kayena/server/schemas"
 	"kayena/server/services"
 	"kayena/server/utils"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -64,6 +65,8 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 		}
 		user, err := s.GetUserProfileByEmail(r.Context(), req.Email)
 		if err == nil {
+			log.Println(req.Password)
+			log.Println(user.Password)
 			if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 				httpx.RespondWithJSON(w, http.StatusBadRequest, schemas.Message{
 					Message: "Invalid password",
@@ -75,7 +78,15 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 				httpx.RespondWithError(w, fmt.Errorf("Error creating jwt: %w", err))
 				return
 			}
-			httpx.RespondWithJSON(w, http.StatusOK, token)
+			httpx.RespondWithJSON(w, http.StatusOK, schemas.LoginResponse{
+				Token: token,
+				User: schemas.GetUserResponse{
+					Phone: user.Phone,
+					Name:  user.Name,
+					Email: user.Email,
+					Id:    user.ID,
+				},
+			})
 		} else if errors.Is(err, pgx.ErrNoRows) {
 			httpx.RespondWithJSON(w, http.StatusBadRequest, schemas.Message{
 				Message: "User not found",

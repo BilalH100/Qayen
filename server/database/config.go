@@ -37,6 +37,7 @@ func SeedDb(s *services.Services) error {
 			if err != nil {
 				return fmt.Errorf("error seeding medications : %s", err)
 			}
+			return nil
 		}
 		return fmt.Errorf("seed check error : error getting medication : %s", err)
 	}

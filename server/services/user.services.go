@@ -8,7 +8,7 @@ import (
 
 type UserService interface {
 	GetUserProfile(ctx context.Context, id int32) (*models.User, error)
-	GetUserProfileByEmail(ctx context.Context, name string) (*models.User, error)
+	GetUserProfileByEmail(ctx context.Context, email string) (*models.User, error)
 	RegisterUser(ctx context.Context, user models.User) error
 }
 

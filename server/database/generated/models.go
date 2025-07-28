@@ -8,6 +8,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Category struct {
+	ID   int32
+	Name string
+}
+
 type Medication struct {
 	ID               int32
 	Status           string
@@ -30,6 +35,7 @@ type Medication struct {
 	CommonSd         []string
 	SeriousSd        []string
 	GeneralInfo      []string
+	CategoryID       pgtype.Int4
 }
 
 type Pharmacy struct {

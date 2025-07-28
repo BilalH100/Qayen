@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link"
 import Image from "next/image"
 import { MapPin, ArrowRight, Pill, User } from "lucide-react"
@@ -8,8 +10,52 @@ import { MedicationCard } from "@/components/medication-card"
 import { HeroSearch } from "@/components/hero-search"
 import { CategoryPill } from "@/components/category-pill"
 import logo from "../public/logo.png"
+import { useEffect, useState } from "react"
+import { BASE_URL } from "@/utils/api"
+
+interface Medication {
+  id: number;
+  status: string;
+  commercial_status: string;
+  speciality: string;
+  dosage: string;
+  form: string;
+  presentation: string;
+  pp: string;
+  active_substance: string;
+  therapeutic_class: string;
+  epi: string;
+  ppv: string;
+  ph: string;
+  code: string;
+  tva: string;
+  created_at: string;
+  pfht: string;
+  description: string;
+  common_sd: string[];
+  serious_sd: string[];
+  general_info: string[];
+}
 
 export default function Home() {
+  const [featuredMedications, setFeaturedMedications] = useState<Medication[]>([]);
+
+  useEffect(() => {
+    const fetchFeaturedMedications = async () => {
+      try {
+        const response = await fetch(`${BASE_URL}/meds/all`);
+        if (response.ok) {
+          const medications = await response.json();
+          // Take first 4 medications as featured
+          setFeaturedMedications(medications.slice(0, 4));
+        }
+      } catch (error) {
+        console.error('Error fetching featured medications:', error);
+      }
+    };
+
+    fetchFeaturedMedications();
+  }, []);
   return (
     <div className="flex min-h-screen flex-col">
       <section className="relative bg-gradient-to-r from-teal-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
@@ -97,39 +143,35 @@ export default function Home() {
             <Link
               href="/medications"
               className="text-teal-600 dark:text-teal-400 flex items-center gap-1 hover:underline"
+              scroll={true}
             >
               View all <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <MedicationCard
-              name="Ibuprofen"
-              image="/placeholder.svg?height=200&width=200"
-              category="Pain Relief"
-              price={9.99}
-              inStock={true}
-            />
-            <MedicationCard
-              name="Amoxicillin"
-              image="/placeholder.svg?height=200&width=200"
-              category="Antibiotics"
-              price={14.5}
-              inStock={true}
-            />
-            <MedicationCard
-              name="Vitamin D3"
-              image="/placeholder.svg?height=200&width=200"
-              category="Vitamins"
-              price={12.99}
-              inStock={true}
-            />
-            <MedicationCard
-              name="Metformin"
-              image="/placeholder.svg?height=200&width=200"
-              category="Diabetes"
-              price={8.75}
-              inStock={false}
-            />
+            {featuredMedications.length > 0 ? (
+              featuredMedications.map((medication) => (
+                <MedicationCard
+                  key={medication.id}
+                  id={medication.id}
+                  name={medication.presentation}
+                  category={medication.therapeutic_class}
+                  form={medication.form}
+                  presentation={medication.presentation}
+                  status={medication.commercial_status}
+                  code={medication.code}
+                />
+              ))
+            ) : (
+              // Fallback content while loading
+              Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="bg-slate-100 dark:bg-slate-800 rounded-lg p-6 animate-pulse">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded mb-2"></div>
+                  <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded mb-4"></div>
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3"></div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

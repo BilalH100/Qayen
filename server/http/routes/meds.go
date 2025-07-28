@@ -13,6 +13,7 @@ func MedRouter(s services.MedService) http.Handler {
 	r.Get("/id/{id}", handlers.GetMedicationByIdHandler(s))
 	r.Get("/code/{code}", handlers.GetMedicationByCodeHandler(s))
 	r.Get("/all", handlers.GetMedicationsHandler(s))
+	r.Get("/categories/all", handlers.GetMedsCategories(s))
 	r.Post("/create", handlers.CreateMedicationHandler(s))
 	r.Delete("/id/{id}", handlers.DeleteMedicationHandler(s))
 	r.Put("/id/{id}", handlers.UpdateMedicationHandler(s))
