@@ -42,8 +42,8 @@ type Pharmacy struct {
 	ID        int32
 	Name      string
 	Address   string
-	Latitude  string
-	Longitude string
+	Latitude  pgtype.Float8
+	Longitude pgtype.Float8
 	City      string
 	Phone     string
 	CreatedAt pgtype.Timestamp

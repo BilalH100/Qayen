@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ArrowLeft,
-  Clock,
-  Package,
-  Check,
-  AlertCircle,
-} from "lucide-react";
+import { ArrowLeft, Clock, Package, Check, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,37 +41,40 @@ interface MedicationPageProps {
 
 export default function MedicationPage({ params }: MedicationPageProps) {
   const [medication, setMedication] = useState<Medication | null>(null);
-  const [relatedMedications, setRelatedMedications] = useState<Medication[]>([]);
+  const [relatedMedications, setRelatedMedications] = useState<Medication[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMedication = async () => {
       try {
-        // Try to fetch by code first (assuming slug is the code)
         const response = await fetch(`${BASE_URL}/meds/code/${params.slug}`);
-        
+
         if (!response.ok) {
           throw new Error("Medication not found");
         }
-        
+
         const medicationData = await response.json();
         setMedication(medicationData);
 
-        // Fetch related medications (from same therapeutic class)
         const relatedResponse = await fetch(`${BASE_URL}/meds/all`);
         if (relatedResponse.ok) {
           const allMedications = await relatedResponse.json();
           const related = allMedications
-            .filter((med: Medication) => 
-              med.therapeutic_class === medicationData.therapeutic_class && 
-              med.id !== medicationData.id
+            .filter(
+              (med: Medication) =>
+                med.therapeutic_class === medicationData.therapeutic_class &&
+                med.id !== medicationData.id,
             )
             .slice(0, 4);
           setRelatedMedications(related);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load medication");
+        setError(
+          err instanceof Error ? err.message : "Failed to load medication",
+        );
       } finally {
         setLoading(false);
       }
@@ -92,7 +89,9 @@ export default function MedicationPage({ params }: MedicationPageProps) {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
-            <p className="text-slate-600 dark:text-slate-300">Loading medication...</p>
+            <p className="text-slate-600 dark:text-slate-300">
+              Loading medication...
+            </p>
           </div>
         </div>
       </div>
@@ -136,34 +135,36 @@ export default function MedicationPage({ params }: MedicationPageProps) {
       </Link>
 
       <div className="grid md:grid-cols-2 gap-8 mb-12">
-        {/* Product Images */}
         <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-8 flex items-center justify-center">
           <div className="text-center">
             <Package className="h-24 w-24 text-slate-400 mx-auto mb-4" />
             <p className="text-slate-500">Medication Image</p>
-          </div> 
+          </div>
         </div>
 
-        {/* Product Info */}
         <div>
           <div className="flex flex-wrap gap-2 mb-4">
-            <Badge className="bg-teal-600">{medication.therapeutic_class}</Badge>
+            <Badge className="bg-teal-600">
+              {medication.therapeutic_class}
+            </Badge>
             <Badge variant="outline">{medication.form}</Badge>
             {medication.status && (
-              <Badge variant={medication.status === "ACTIVE" ? "default" : "secondary"}>
+              <Badge
+                variant={
+                  medication.status === "ACTIVE" ? "default" : "secondary"
+                }
+              >
                 {medication.status}
               </Badge>
             )}
           </div>
-          
-          <h1 className="text-3xl font-bold mb-2">{medication.presentation}</h1>
-          
+
+          <h1 className="text-3xl font-bold mb-2">{medication.speciality}</h1>
+
           <div className="space-y-2 mb-6">
             <p className="text-slate-600 dark:text-slate-300">
-              <span className="font-medium">Code:</span> {medication.code}
-            </p>
-            <p className="text-slate-600 dark:text-slate-300">
-              <span className="font-medium">Active Substance:</span> {medication.active_substance}
+              <span className="font-medium">Active Substance:</span>{" "}
+              {medication.active_substance}
             </p>
             <p className="text-slate-600 dark:text-slate-300">
               <span className="font-medium">Dosage:</span> {medication.dosage}
@@ -183,14 +184,18 @@ export default function MedicationPage({ params }: MedicationPageProps) {
                   <div className="bg-green-100 dark:bg-green-900/30 p-0.5 rounded-full">
                     <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
                   </div>
-                  <span className="text-green-600 dark:text-green-400">Available</span>
+                  <span className="text-green-600 dark:text-green-400">
+                    Available
+                  </span>
                 </>
               ) : (
                 <>
                   <div className="bg-gray-100 dark:bg-gray-900/30 p-0.5 rounded-full">
                     <Clock className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
                   </div>
-                  <span className="text-gray-600 dark:text-gray-400">{medication.commercial_status}</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {medication.commercial_status}
+                  </span>
                 </>
               )}
             </div>
@@ -199,20 +204,32 @@ export default function MedicationPage({ params }: MedicationPageProps) {
           <div className="space-y-3">
             {medication.pp && (
               <div className="text-sm">
-                <span className="font-medium text-slate-700 dark:text-slate-300">Public Price:</span>
-                <span className="ml-2 text-slate-600 dark:text-slate-400">{medication.pp} DZD</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  Public Price:
+                </span>
+                <span className="ml-2 text-slate-600 dark:text-slate-400">
+                  {medication.pp} DZD
+                </span>
               </div>
             )}
             {medication.ppv && (
               <div className="text-sm">
-                <span className="font-medium text-slate-700 dark:text-slate-300">Sale Price:</span>
-                <span className="ml-2 text-slate-600 dark:text-slate-400">{medication.ppv} DZD</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  Sale Price:
+                </span>
+                <span className="ml-2 text-slate-600 dark:text-slate-400">
+                  {medication.ppv} DZD
+                </span>
               </div>
             )}
             {medication.ph && (
               <div className="text-sm">
-                <span className="font-medium text-slate-700 dark:text-slate-300">Hospital Price:</span>
-                <span className="ml-2 text-slate-600 dark:text-slate-400">{medication.ph} DZD</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  Hospital Price:
+                </span>
+                <span className="ml-2 text-slate-600 dark:text-slate-400">
+                  {medication.ph} DZD
+                </span>
               </div>
             )}
           </div>
@@ -242,20 +259,24 @@ export default function MedicationPage({ params }: MedicationPageProps) {
               <h4 className="font-semibold mb-3">Basic Information</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Code:</span>
-                  <span className="font-medium">{medication.code}</span>
-                </li>
-                <li className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Form:</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Form:
+                  </span>
                   <span className="font-medium">{medication.form}</span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Status:</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Status:
+                  </span>
                   <span className="font-medium">{medication.status}</span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Commercial Status:</span>
-                  <span className="font-medium">{medication.commercial_status}</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Commercial Status:
+                  </span>
+                  <span className="font-medium">
+                    {medication.commercial_status}
+                  </span>
                 </li>
               </ul>
             </div>
@@ -263,15 +284,25 @@ export default function MedicationPage({ params }: MedicationPageProps) {
               <h4 className="font-semibold mb-3">Clinical Information</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Active Substance:</span>
-                  <span className="font-medium">{medication.active_substance}</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Active Substance:
+                  </span>
+                  <span className="font-medium">
+                    {medication.active_substance}
+                  </span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Therapeutic Class:</span>
-                  <span className="font-medium">{medication.therapeutic_class}</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Therapeutic Class:
+                  </span>
+                  <span className="font-medium">
+                    {medication.therapeutic_class}
+                  </span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Speciality:</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Speciality:
+                  </span>
                   <span className="font-medium">{medication.speciality}</span>
                 </li>
               </ul>
@@ -286,7 +317,8 @@ export default function MedicationPage({ params }: MedicationPageProps) {
                 <span className="font-medium">Dosage:</span> {medication.dosage}
               </p>
               <p className="text-slate-600 dark:text-slate-300 mb-4">
-                <span className="font-medium">Presentation:</span> {medication.presentation}
+                <span className="font-medium">Presentation:</span>{" "}
+                {medication.presentation}
               </p>
             </div>
           ) : (
@@ -299,7 +331,8 @@ export default function MedicationPage({ params }: MedicationPageProps) {
               Important Note
             </h4>
             <p className="text-yellow-700 dark:text-yellow-300 text-sm">
-              Always follow your doctor's instructions or consult with a healthcare professional for proper dosage. Do not self-medicate.
+              Always follow your doctor's instructions or consult with a
+              healthcare professional for proper dosage. Do not self-medicate.
             </p>
           </div>
         </TabsContent>
@@ -340,7 +373,9 @@ export default function MedicationPage({ params }: MedicationPageProps) {
               Important Warning
             </h4>
             <p className="text-red-700 dark:text-red-300 text-sm">
-              If you experience any severe or persistent side effects, stop taking this medication and consult your healthcare provider immediately.
+              If you experience any severe or persistent side effects, stop
+              taking this medication and consult your healthcare provider
+              immediately.
             </p>
           </div>
         </TabsContent>
@@ -361,20 +396,23 @@ export default function MedicationPage({ params }: MedicationPageProps) {
             {medication.epi && (
               <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 <h4 className="font-semibold mb-2">EPI Code</h4>
-                <p className="text-slate-600 dark:text-slate-300 text-sm">{medication.epi}</p>
+                <p className="text-slate-600 dark:text-slate-300 text-sm">
+                  {medication.epi}
+                </p>
               </div>
             )}
             {medication.tva && (
               <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 <h4 className="font-semibold mb-2">TVA</h4>
-                <p className="text-slate-600 dark:text-slate-300 text-sm">{medication.tva}</p>
+                <p className="text-slate-600 dark:text-slate-300 text-sm">
+                  {medication.tva}
+                </p>
               </div>
             )}
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Related Products */}
       <section>
         <h2 className="text-2xl font-bold mb-6">Related Medications</h2>
         {relatedMedications.length > 0 ? (

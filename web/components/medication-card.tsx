@@ -1,42 +1,42 @@
-import { Check, X } from "lucide-react"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import Link from "next/link"
+import { Check, X } from "lucide-react";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
 interface MedicationCardProps {
-  id: number
-  name: string
-  category?: string
-  form?: string
-  presentation?: string
-  status?: string
-  code?: string
+  id: number;
+  name: string;
+  category?: string;
+  form?: string;
+  presentation?: string;
+  status?: string;
+  code?: string;
 }
 
-export function MedicationCard({ 
-  id, 
-  name, 
-  category, 
-  form, 
-  presentation, 
+export function MedicationCard({
+  id,
+  name,
+  category,
+  form,
+  presentation,
   status,
-  code 
+  code,
 }: MedicationCardProps) {
-  // Use code for the URL slug, or fall back to ID
   const slug = code || id.toString();
-  
-  // Determine if medication is available based on status
-  const isAvailable = status?.toLowerCase() === 'commercialisé' || status?.toLowerCase() === 'active';
-  
+
+  const isAvailable =
+    status?.toLowerCase() === "commercialisé" ||
+    status?.toLowerCase() === "active";
+
   return (
     <Link href={`/medications/${slug}`}>
       <Card className="overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
         <div className="relative h-48 w-full overflow-hidden bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
           <div className="text-center">
-            <div className="text-6xl text-slate-300 dark:text-slate-600 mb-2">💊</div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {form && presentation ? `${form} - ${presentation}` : form || presentation || 'Medication'}
-            </p>
+            <div className="text-6xl text-slate-300 dark:text-slate-600 mb-2">
+              💊
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400"></p>
           </div>
           {category && (
             <Badge className="absolute top-3 right-3 bg-teal-600 text-white">
@@ -48,9 +48,11 @@ export function MedicationCard({
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white line-clamp-2">
             {name}
           </h3>
-          {code && (
+          {presentation && (
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Code: {code}
+              {form && presentation
+                ? `${form} - ${presentation}`
+                : form || "Medication"}
             </p>
           )}
         </CardContent>
@@ -73,5 +75,5 @@ export function MedicationCard({
         </CardFooter>
       </Card>
     </Link>
-  )
+  );
 }

@@ -19,11 +19,18 @@ type MedicationJson struct {
 	Pfht             string `json:"pfht"`
 }
 type Pharmacy struct {
-	Name      string  `json:"nom"`
-	City      string  `json:"ville"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Address   string  `json:"address"`
+	Name      string `json:"name"`
+	City      string `json:"city"`
+	Latitude  string `json:"latitude"`
+	Longitude string `json:"longitude"`
+	Address   string `json:"address"`
+	Phone     string `json:"phone"`
+	Activity  string `json:"activity"`
+}
+
+type SeedingPharmacies struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
 }
 
 type Coordinates struct {

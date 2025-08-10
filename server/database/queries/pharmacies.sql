@@ -17,3 +17,22 @@ RETURNING *;
 
 -- name: DeletePharmacy :exec
 DELETE FROM pharmacies WHERE id = $1;
+
+-- name: GetClosestPharmacyWithMedication :one
+SELECT
+  p.*,
+  (
+    6371 * acos(
+      cos(radians($1)) *
+      cos(radians(p.latitude)) *
+      cos(radians(p.longitude) - radians($2)) +
+      sin(radians($1)) *
+      sin(radians(p.latitude))
+    )
+  ) AS distance_km
+FROM pharmacies p
+JOIN stock pm ON pm.pharmacy_id = p.id
+WHERE pm.medication_id = $3
+  AND pm.quantity > 0
+ORDER BY distance_km ASC
+LIMIT 1;

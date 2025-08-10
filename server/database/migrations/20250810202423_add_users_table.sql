@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE TABLE users (
   id SERIAL PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
@@ -16,8 +18,8 @@ CREATE TABLE pharmacies (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   address TEXT,
-  latitude TEXT,
-  longitude TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
   city TEXT,
   phone TEXT,
   created_at TIMESTAMP DEFAULT now()
@@ -39,11 +41,11 @@ CREATE TABLE medications (
   ph TEXT,
   pfht TEXT,
   code TEXT,
-  tva TEXT, 
+  tva TEXT,
   created_at TIMESTAMP DEFAULT now(),
   description TEXT,
   common_sd TEXT[],
-  serious_sd TEXT[], 
+  serious_sd TEXT[],
   general_info TEXT[],
   category_id INTEGER,
   FOREIGN KEY (category_id) REFERENCES category(id) ON DELETE CASCADE
@@ -57,5 +59,8 @@ CREATE TABLE stock (
   updated_at TIMESTAMP DEFAULT now(),
   UNIQUE (pharmacy_id, medication_id)
 );
-
-
+-- +goose StatementEnd
+-- +goose Down
+-- +goose StatementBegin
+SELECT 'down SQL query';
+-- +goose StatementEnd

@@ -35,23 +35,25 @@ func SeedDb(s *services.Services) error {
 			fmt.Println("Seeding meds ...")
 			err = SeedMedications(ctx, s.MedService)
 			if err != nil {
-				return fmt.Errorf("error seeding medications : %s", err)
+
+				return fmt.Errorf("error seeding medications : %w", err)
 			}
-			return nil
+		} else {
+			return fmt.Errorf("seeding check failed: %w", err)
 		}
-		return fmt.Errorf("seed check error : error getting medication : %s", err)
 	}
 	fmt.Println("medications already seeded skipping ...")
-	// _, err = Queries.GetPharmacyByID(ctx, 1)
-	// if err != nil {
-	// 	if errors.Is(err, pgx.ErrNoRows){
-	// 		fmt.Println("Seeding Pharmacies ...")
-	// 		err = SeedPharmacies()
-	// 		if err != nil {
-	// 			return fmt.Errorf("error seeding pharmacies : %s", err)
-	// 		}
-	// 	}
-	// 	return fmt.Errorf("seed check error : error getting pharmacy: %s", err)
-	// }
+	_, err = s.PharmacyService.GetByIdService(ctx, 1)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			fmt.Println("Seeding Pharmacies ...")
+			err = SeedRabatPharmacies(ctx, s)
+			if err != nil {
+				return fmt.Errorf("error seeding pharmacies : %w", err)
+			}
+		} else {
+			return fmt.Errorf("seed check error : error getting pharmacy: %s", err)
+		}
+	}
 	return nil
 }

@@ -7,6 +7,8 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createPharmacy = `-- name: CreatePharmacy :one
@@ -18,8 +20,8 @@ RETURNING id, name, address, latitude, longitude, city, phone, created_at
 type CreatePharmacyParams struct {
 	Name      string
 	Address   string
-	Latitude  string
-	Longitude string
+	Latitude  pgtype.Float8
+	Longitude pgtype.Float8
 	City      string
 	Phone     string
 }
@@ -54,6 +56,61 @@ DELETE FROM pharmacies WHERE id = $1
 func (q *Queries) DeletePharmacy(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deletePharmacy, id)
 	return err
+}
+
+const getClosestPharmacyWithMedication = `-- name: GetClosestPharmacyWithMedication :one
+SELECT
+  p.id, p.name, p.address, p.latitude, p.longitude, p.city, p.phone, p.created_at,
+  (
+    6371 * acos(
+      cos(radians($1)) *
+      cos(radians(p.latitude)) *
+      cos(radians(p.longitude) - radians($2)) +
+      sin(radians($1)) *
+      sin(radians(p.latitude))
+    )
+  ) AS distance_km
+FROM pharmacies p
+JOIN stock pm ON pm.pharmacy_id = p.id
+WHERE pm.medication_id = $3
+  AND pm.quantity > 0
+ORDER BY distance_km ASC
+LIMIT 1
+`
+
+type GetClosestPharmacyWithMedicationParams struct {
+	Radians      float64
+	Radians_2    float64
+	MedicationID pgtype.Int4
+}
+
+type GetClosestPharmacyWithMedicationRow struct {
+	ID         int32
+	Name       string
+	Address    string
+	Latitude   pgtype.Float8
+	Longitude  pgtype.Float8
+	City       string
+	Phone      string
+	CreatedAt  pgtype.Timestamp
+	DistanceKm int32
+}
+
+func (q *Queries) GetClosestPharmacyWithMedication(ctx context.Context, arg GetClosestPharmacyWithMedicationParams) (GetClosestPharmacyWithMedicationRow, error) {
+	row := q.db.QueryRow(ctx, getClosestPharmacyWithMedication, arg.Radians, arg.Radians_2, arg.MedicationID)
+	var i GetClosestPharmacyWithMedicationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Address,
+		&i.Latitude,
+		&i.Longitude,
+		&i.City,
+		&i.Phone,
+		&i.CreatedAt,
+		&i.DistanceKm,
+	)
+	return i, err
 }
 
 const getPharmacyByID = `-- name: GetPharmacyByID :one
@@ -120,8 +177,8 @@ type UpdatePharmacyParams struct {
 	ID        int32
 	Name      string
 	Address   string
-	Latitude  string
-	Longitude string
+	Latitude  pgtype.Float8
+	Longitude pgtype.Float8
 	City      string
 	Phone     string
 }
