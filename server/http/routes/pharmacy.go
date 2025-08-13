@@ -10,6 +10,7 @@ import (
 
 func PharmacyRouter(s services.PharmacyService) http.Handler {
 	r := chi.NewRouter()
+	r.Get("/", handlers.GetAllPharmaciesHandler(s))
 	r.Get("/closest", handlers.GetClosestPharmacyHandler(s))
 	return r
 }

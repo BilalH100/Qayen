@@ -240,8 +240,8 @@ func (s *MedicationScraper) PrintSummary() {
 
 func ScrapeMeds() {
 	scraper := NewMedicationScraper()
-    err := scraper.ScrapeAll(); 	
-    log.Println(err)
+	err := scraper.ScrapeAll()
+	log.Println(err)
 	scraper.PrintSummary()
 
 	if len(scraper.Medications) > 0 {

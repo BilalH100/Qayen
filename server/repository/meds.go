@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	sqlc "kayena/server/database/generated"
 	"kayena/server/models"
 	"kayena/server/schemas"
@@ -15,6 +16,7 @@ type MedRepository interface {
 	Update(ctx context.Context, med sqlc.UpdateMedicationParams) (*models.Medication, error)
 	GetAll(ctx context.Context, options schemas.Options) ([]models.Medication, error)
 	GetCategories(ctx context.Context) ([]models.Category, error)
+	Search(ctx context.Context, query string) ([]models.Medication, error)
 }
 
 type sqlcMedRepo struct {
@@ -171,4 +173,40 @@ func (s *sqlcMedRepo) GetCategories(ctx context.Context) ([]models.Category, err
 		})
 	}
 	return categories, nil
+}
+
+func (s *sqlcMedRepo) Search(ctx context.Context, query string) ([]models.Medication, error) {
+	searchQuery := "%" + query + "%"
+	results, err := s.queries.SearchMedications(ctx, searchQuery)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	var medications []models.Medication
+	for _, med := range results {
+		medications = append(medications, models.Medication{
+			ID:               med.ID,
+			Code:             med.Code,
+			Status:           med.Status,
+			CommercialStatus: med.CommercialStatus,
+			Speciality:       med.Speciality,
+			Dosage:           med.Dosage,
+			Form:             med.Form,
+			Presentation:     med.Presentation,
+			Pp:               med.Pp,
+			ActiveSubstance:  med.ActiveSubstance,
+			TherapeuticClass: med.TherapeuticClass,
+			Epi:              med.Epi,
+			Ppv:              med.Ppv,
+			Ph:               med.Ph,
+			Pfht:             med.Pfht,
+			Tva:              med.Tva,
+			CreatedAt:        med.CreatedAt,
+			Description:      med.Description,
+			CommonSd:         med.CommonSd,
+			SeriousSd:        med.SeriousSd,
+			GeneralInfo:      med.GeneralInfo,
+		})
+	}
+	return medications, nil
 }

@@ -4,7 +4,7 @@ INSERT INTO medications (
   form, presentation, pp, active_substance, therapeutic_class,
   epi, ppv, ph, pfht, code, tva, description, common_sd, serious_sd, general_info
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19); 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);
 
 -- name: GetMedicationByID :one
 SELECT * FROM medications WHERE id = $1;
@@ -20,7 +20,7 @@ UPDATE medications
 SET
   status = $2, commercial_status = $3, speciality = $4, dosage = $5,
   form = $6, presentation = $7, pp = $8, active_substance = $9,
-  therapeutic_class = $10, epi = $11, ppv = $12, ph = $13, pfht = $14, code = $15, tva = $16, description = $17, 
+  therapeutic_class = $10, epi = $11, ppv = $12, ph = $13, pfht = $14, code = $15, tva = $16, description = $17,
   common_sd = $18, serious_sd = $19, general_info = $20
 WHERE id = $1
 RETURNING *;
@@ -33,5 +33,16 @@ SELECT * FROM medications
 ORDER BY id
 LIMIT $1 OFFSET $2;
 
--- name: GetCategories :many 
+-- name: GetCategories :many
 SELECT DISTINCT * FROM category;
+
+-- name: SearchMedications :many
+SELECT * FROM medications
+WHERE
+  presentation ILIKE $1 OR
+  speciality ILIKE $1 OR
+  active_substance ILIKE $1 OR
+  therapeutic_class ILIKE $1 OR
+  code ILIKE $1
+ORDER BY id
+LIMIT 20;

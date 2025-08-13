@@ -10,6 +10,7 @@ type PharmacyService interface {
 	GetByIdService(ctx context.Context, id int32) (*schemas.Pharmacy, error)
 	CreateService(ctx context.Context, p *schemas.Pharmacy) error
 	GetClosestService(ctx context.Context, c schemas.Coordinates, medId int32) (*int32, *schemas.Pharmacy, error)
+	GetAllService(ctx context.Context) ([]schemas.Pharmacy, error)
 }
 
 type pharmacyService struct {
@@ -28,6 +29,10 @@ func (s *pharmacyService) GetByIdService(ctx context.Context, id int32) (*schema
 
 func (s *pharmacyService) CreateService(ctx context.Context, p *schemas.Pharmacy) error {
 	return s.pharmaryRepo.Create(ctx, p)
+}
+
+func (s *pharmacyService) GetAllService(ctx context.Context) ([]schemas.Pharmacy, error) {
+	return s.pharmaryRepo.GetAll(ctx)
 }
 
 func (s *pharmacyService) GetClosestService(ctx context.Context, c schemas.Coordinates, medId int32) (*int32, *schemas.Pharmacy, error) {

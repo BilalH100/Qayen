@@ -100,7 +100,6 @@ export default function MedicationsPage() {
     }
   };
 
-  // Handle sorting
   const handleSort = (medications: Medication[]) => {
     if (!medications) return medications;
     
@@ -115,7 +114,6 @@ export default function MedicationsPage() {
     }
   };
 
-  // Handle category filtering
   const handleCategoryFilter = (medications: Medication[]) => {
     if (!medications || selectedCategory === "all") return medications;
     

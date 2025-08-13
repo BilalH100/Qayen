@@ -1,10 +1,19 @@
 "use client";
 
-import { ArrowLeft, Clock, Package, Check, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock,
+  Package,
+  Check,
+  AlertCircle,
+  MapPin,
+  Navigation,
+} from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { MedicationCard } from "@/components/medication-card";
 import { useEffect, useState } from "react";
 import { BASE_URL } from "@/utils/api";
@@ -33,6 +42,23 @@ interface Medication {
   general_info: string[];
 }
 
+interface Pharmacy {
+  id: number;
+  name: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  city: string;
+  phone: string;
+  created_at: string;
+  activity?: string;
+}
+
+interface PharmacyWithDistance {
+  distance: number;
+  pharmacy: Pharmacy;
+}
+
 interface MedicationPageProps {
   params: {
     slug: string;
@@ -44,6 +70,15 @@ export default function MedicationPage({ params }: MedicationPageProps) {
   const [relatedMedications, setRelatedMedications] = useState<Medication[]>(
     [],
   );
+  const [nearbyPharmacies, setNearbyPharmacies] = useState<
+    PharmacyWithDistance[]
+  >([]);
+  // Hardcoded coordinates for Rabat, Morocco
+  const [userCoordinates] = useState({
+    latitude: "33.98978814461598",
+    longitude: "-6.857842157069873",
+  });
+  const [loadingPharmacies, setLoadingPharmacies] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,7 +116,34 @@ export default function MedicationPage({ params }: MedicationPageProps) {
     };
 
     fetchMedication();
+
+    // Using hardcoded coordinates for Rabat, Morocco
+    console.log("Using hardcoded location: Rabat, Morocco");
   }, [params.slug]);
+
+  // Fetch nearby pharmacies when we have both medication and user location
+  useEffect(() => {
+    const fetchNearbyPharmacies = async () => {
+      if (!medication) return;
+
+      setLoadingPharmacies(true);
+      try {
+        const url = `${BASE_URL}/pharmacies/closest?id=${medication.id}&latitude=${userCoordinates.latitude}&longitude=${userCoordinates.longitude}`;
+        const response = await fetch(url);
+
+        if (response.ok) {
+          const data = await response.json();
+          setNearbyPharmacies([data]); // Start with closest pharmacy
+        }
+      } catch (err) {
+        console.error("Error fetching nearby pharmacies:", err);
+      } finally {
+        setLoadingPharmacies(false);
+      }
+    };
+
+    fetchNearbyPharmacies();
+  }, [medication, userCoordinates]);
 
   if (loading) {
     return (
@@ -412,6 +474,88 @@ export default function MedicationPage({ params }: MedicationPageProps) {
           </div>
         </TabsContent>
       </Tabs>
+
+      <section className="mb-12">
+        <h2 className="text-2xl font-bold mb-6">Nearby Pharmacies</h2>
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 mb-4">
+          <p className="text-blue-700 dark:text-blue-400 flex items-center">
+            <MapPin className="h-4 w-4 mr-2" />
+            Using location: Rabat, Morocco (33.9898°N, -6.8578°W)
+          </p>
+        </div>
+        {loadingPharmacies ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
+            <p className="text-slate-600 dark:text-slate-300">
+              Finding nearby pharmacies...
+            </p>
+          </div>
+        ) : nearbyPharmacies.length > 0 ? (
+          <div className="space-y-4">
+            {nearbyPharmacies.map((item) => (
+              <Card
+                key={item.pharmacy.id}
+                className="overflow-hidden transition-all duration-300 hover:shadow-lg"
+              >
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                      {item.pharmacy.name}
+                    </h3>
+                    <Badge
+                      variant="outline"
+                      className="bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800"
+                    >
+                      {item.distance} km away
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 mt-2 text-sm">
+                    <MapPin className="h-4 w-4" />
+                    <span>
+                      {item.pharmacy.address}, {item.pharmacy.city}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 mt-1 text-sm">
+                    <Clock className="h-4 w-4" />
+                    <span>Phone: {item.pharmacy.phone}</span>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="p-4 pt-0 flex justify-between">
+                  <Link
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${item.pharmacy.latitude},${item.pharmacy.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <Navigation className="h-4 w-4" />
+                      Directions
+                    </Button>
+                  </Link>
+
+                  <Link href={`/pharmacies/${item.pharmacy.id}`}>
+                    <Button size="sm" className="bg-teal-600 hover:bg-teal-700">
+                      View Details
+                    </Button>
+                  </Link>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            <p className="text-slate-600 dark:text-slate-300">
+              No pharmacies with this medication found near you.
+            </p>
+          </div>
+        )}
+      </section>
 
       <section>
         <h2 className="text-2xl font-bold mb-6">Related Medications</h2>

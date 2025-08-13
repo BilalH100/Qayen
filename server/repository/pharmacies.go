@@ -13,6 +13,7 @@ type PharmacyRepository interface {
 	GetById(ctx context.Context, id int32) (*schemas.Pharmacy, error)
 	Create(ctx context.Context, p *schemas.Pharmacy) error
 	GetClosest(ctx context.Context, c schemas.Coordinates, medId int32) (*int32, *schemas.Pharmacy, error)
+	GetAll(ctx context.Context) ([]schemas.Pharmacy, error)
 }
 
 type sqlcPharmacyRepo struct {
@@ -66,25 +67,53 @@ func (s *sqlcPharmacyRepo) Create(ctx context.Context, p *schemas.Pharmacy) erro
 func (s *sqlcPharmacyRepo) GetClosest(ctx context.Context, c schemas.Coordinates, medId int32) (*int32, *schemas.Pharmacy, error) {
 	lat, err := strconv.ParseFloat(c.Lat, 64)
 	if err != nil {
-		return nil, nil, wrap(err, "")
+		return nil, nil, wrap(err, "invalid latitude format")
 	}
-	lon, err := strconv.ParseFloat(c.Lat, 64)
+	lon, err := strconv.ParseFloat(c.Long, 64)
 	if err != nil {
-		return nil, nil, wrap(err, "")
+		return nil, nil, wrap(err, "invalid longitude format")
 	}
 	res, err := s.queries.GetClosestPharmacyWithMedication(ctx, sqlc.GetClosestPharmacyWithMedicationParams{
 		Radians:      lat,
 		Radians_2:    lon,
 		MedicationID: utils.Int32ToPgInt4(medId),
 	})
-	return &res.DistanceKm, &schemas.Pharmacy{
+	if err != nil {
+		return nil, nil, wrap(err, "failed to find closest pharmacy")
+	}
+
+	distance := res.DistanceKm
+	pharmacy := &schemas.Pharmacy{
 		Name:      res.Name,
 		City:      res.City,
 		Latitude:  utils.Float8ToString(res.Latitude),
 		Longitude: utils.Float8ToString(res.Longitude),
 		Address:   res.Address,
 		Phone:     res.Phone,
-	}, nil
+	}
+
+	return &distance, pharmacy, nil
+}
+
+func (s *sqlcPharmacyRepo) GetAll(ctx context.Context) ([]schemas.Pharmacy, error) {
+	res, err := s.queries.ListPharmacies(ctx)
+	if err != nil {
+		return nil, wrap(err, "")
+	}
+
+	pharmacies := make([]schemas.Pharmacy, len(res))
+	for i, pharmacy := range res {
+		pharmacies[i] = schemas.Pharmacy{
+			Name:      pharmacy.Name,
+			City:      pharmacy.City,
+			Latitude:  utils.Float8ToString(pharmacy.Latitude),
+			Longitude: utils.Float8ToString(pharmacy.Longitude),
+			Address:   pharmacy.Address,
+			Phone:     pharmacy.Phone,
+		}
+	}
+
+	return pharmacies, nil
 }
 
 func wrap(err error, m string) error {

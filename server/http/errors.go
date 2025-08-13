@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -32,7 +33,7 @@ func RespondWithError(w http.ResponseWriter, err error) {
 	default:
 		status = http.StatusInternalServerError
 	}
-
+	fmt.Println(err)
 	http.Error(w, err.Error(), status)
 }
 

@@ -25,6 +25,7 @@ type MedService interface {
 	GetMedicationById(ctx context.Context, id int32) (*models.Medication, error)
 	GetAllMedications(ctx context.Context, opt schemas.Options) ([]models.Medication, error)
 	GetAllCategories(ctx context.Context) ([]models.Category, error)
+	SearchMedications(ctx context.Context, query string) ([]models.Medication, error)
 }
 
 type medService struct {
@@ -103,6 +104,10 @@ func (s *medService) GetAllMedications(ctx context.Context, opt schemas.Options)
 
 func (s *medService) GetAllCategories(ctx context.Context) ([]models.Category, error) {
 	return s.medRepo.GetCategories(ctx)
+}
+
+func (s *medService) SearchMedications(ctx context.Context, query string) ([]models.Medication, error) {
+	return s.medRepo.Search(ctx, query)
 }
 
 func GetMetaData(drugName string, e *schemas.Failed) (string, schemas.SideEffects, error) {

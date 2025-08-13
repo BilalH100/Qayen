@@ -267,12 +267,67 @@ func (q *Queries) ListMedications(ctx context.Context) ([]Medication, error) {
 	return items, nil
 }
 
+const searchMedications = `-- name: SearchMedications :many
+SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info, category_id FROM medications
+WHERE
+  presentation ILIKE $1 OR
+  speciality ILIKE $1 OR
+  active_substance ILIKE $1 OR
+  therapeutic_class ILIKE $1 OR
+  code ILIKE $1
+ORDER BY id
+LIMIT 20
+`
+
+func (q *Queries) SearchMedications(ctx context.Context, presentation string) ([]Medication, error) {
+	rows, err := q.db.Query(ctx, searchMedications, presentation)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Medication
+	for rows.Next() {
+		var i Medication
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.CommercialStatus,
+			&i.Speciality,
+			&i.Dosage,
+			&i.Form,
+			&i.Presentation,
+			&i.Pp,
+			&i.ActiveSubstance,
+			&i.TherapeuticClass,
+			&i.Epi,
+			&i.Ppv,
+			&i.Ph,
+			&i.Pfht,
+			&i.Code,
+			&i.Tva,
+			&i.CreatedAt,
+			&i.Description,
+			&i.CommonSd,
+			&i.SeriousSd,
+			&i.GeneralInfo,
+			&i.CategoryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateMedication = `-- name: UpdateMedication :one
 UPDATE medications
 SET
   status = $2, commercial_status = $3, speciality = $4, dosage = $5,
   form = $6, presentation = $7, pp = $8, active_substance = $9,
-  therapeutic_class = $10, epi = $11, ppv = $12, ph = $13, pfht = $14, code = $15, tva = $16, description = $17, 
+  therapeutic_class = $10, epi = $11, ppv = $12, ph = $13, pfht = $14, code = $15, tva = $16, description = $17,
   common_sd = $18, serious_sd = $19, general_info = $20
 WHERE id = $1
 RETURNING id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info, category_id
