@@ -46,3 +46,34 @@ WHERE
   code ILIKE $1
 ORDER BY id
 LIMIT 20;
+
+-- name: SearchMedicationsBySpeciality :many
+SELECT * FROM medications
+WHERE speciality ILIKE $1
+ORDER BY 
+  CASE 
+    WHEN speciality ILIKE $1 THEN 1
+    ELSE 2
+  END,
+  speciality
+LIMIT 20;
+
+-- name: SearchMedicationsWithPriority :many
+SELECT * FROM medications
+WHERE
+  speciality ILIKE $1 OR
+  active_substance ILIKE $1 OR
+  presentation ILIKE $1 OR
+  therapeutic_class ILIKE $1 OR
+  code ILIKE $1
+ORDER BY 
+  CASE 
+    WHEN speciality ILIKE $1 THEN 1
+    WHEN active_substance ILIKE $1 THEN 2
+    WHEN presentation ILIKE $1 THEN 3
+    WHEN therapeutic_class ILIKE $1 THEN 4
+    WHEN code ILIKE $1 THEN 5
+    ELSE 6
+  END,
+  speciality
+LIMIT 20;

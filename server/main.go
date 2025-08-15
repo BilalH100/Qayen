@@ -25,7 +25,7 @@ func main() {
 		logger.Fatal("Connection to Db failed: ", err)
 	}
 	service := services.NewService(db)
-	err = database.SeedDb(service)
+	err = database.SeedDb(service, logger)
 	if err != nil {
 		logger.Fatal(err)
 	}

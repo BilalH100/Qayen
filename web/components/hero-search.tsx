@@ -72,7 +72,10 @@ export function HeroSearch() {
   // Search medications as user types
   useEffect(() => {
     const searchMedications = async () => {
-      if (query.length < 2 || searchType !== "medication") return;
+      if (query.length < 2 || searchType !== "medication") {
+        setSearchResults([]);
+        return;
+      }
 
       setSearching(true);
       try {
@@ -81,10 +84,13 @@ export function HeroSearch() {
         );
         if (response.ok) {
           const data = await response.json();
-          setSearchResults(data);
+          setSearchResults(Array.isArray(data) ? data : []);
+        } else {
+          setSearchResults([]);
         }
       } catch (error) {
         console.error("Error searching medications:", error);
+        setSearchResults([]);
       } finally {
         setSearching(false);
       }
@@ -111,7 +117,7 @@ export function HeroSearch() {
 
   const handleMedicationSelect = (medication: Medication) => {
     setSelectedMedication(medication);
-    setQuery(medication.presentation);
+    setQuery(medication.speciality);
   };
 
   const clearSelection = () => {
@@ -188,6 +194,7 @@ export function HeroSearch() {
 
               {query.length >= 2 &&
                 !selectedMedication &&
+                searchResults &&
                 searchResults.length > 0 && (
                   <div className="absolute w-full bg-white dark:bg-slate-800 shadow-lg rounded-md mt-1 border border-slate-200 dark:border-slate-700 z-50 max-h-64 overflow-y-auto">
                     <Command>
@@ -210,10 +217,13 @@ export function HeroSearch() {
                                 >
                                   <div>
                                     <p className="font-medium">
-                                      {medication.presentation}
+                                      {medication.speciality}
                                     </p>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                                      {medication.dosage} • {medication.form} •{" "}
+                                      <span className="font-medium text-teal-600 dark:text-teal-400">
+                                        {medication.presentation}
+                                      </span>{" "}
+                                      • {medication.dosage} • {medication.form} •{" "}
                                       {medication.therapeutic_class}
                                     </p>
                                   </div>
@@ -275,7 +285,7 @@ export function HeroSearch() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>
-              Pharmacies with {selectedMedication?.presentation}
+              Pharmacies with {selectedMedication?.speciality}
             </DialogTitle>
           </DialogHeader>
           {selectedMedication && (

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 )
@@ -33,4 +34,13 @@ func RespondWithError(w http.ResponseWriter, err error) {
 	}
 
 	http.Error(w, err.Error(), status)
+}
+
+func ErrorResponse(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": false,
+		"error":   message,
+	})
 }

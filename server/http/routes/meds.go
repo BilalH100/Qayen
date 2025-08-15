@@ -15,6 +15,7 @@ func MedRouter(s services.MedService) http.Handler {
 	r.Get("/all", handlers.GetMedicationsHandler(s))
 	r.Get("/categories/all", handlers.GetMedsCategories(s))
 	r.Get("/search", handlers.SearchMedicationsHandler(s))
+	r.Get("/search/speciality", handlers.SearchMedicationsBySpecialityHandler(s))
 	r.Post("/create", handlers.CreateMedicationHandler(s))
 	r.Delete("/id/{id}", handlers.DeleteMedicationHandler(s))
 	r.Put("/id/{id}", handlers.UpdateMedicationHandler(s))

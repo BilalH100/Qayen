@@ -195,3 +195,25 @@ func SearchMedicationsHandler(s services.MedService) http.HandlerFunc {
 		httpx.RespondWithJSON(w, http.StatusOK, medications)
 	}
 }
+
+func SearchMedicationsBySpecialityHandler(s services.MedService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("q")
+		if query == "" {
+			httpx.RespondWithError(w, fmt.Errorf("search query is required"))
+			return
+		}
+
+		medications, err := s.SearchMedicationsBySpeciality(r.Context(), query)
+		if err != nil {
+			fmt.Println(err)
+			httpx.RespondWithError(w, err)
+			return
+		}
+
+		httpx.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    medications,
+		})
+	}
+}

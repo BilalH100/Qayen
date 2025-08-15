@@ -322,6 +322,125 @@ func (q *Queries) SearchMedications(ctx context.Context, presentation string) ([
 	return items, nil
 }
 
+const searchMedicationsBySpeciality = `-- name: SearchMedicationsBySpeciality :many
+SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info, category_id FROM medications
+WHERE speciality ILIKE $1
+ORDER BY 
+  CASE 
+    WHEN speciality ILIKE $1 THEN 1
+    ELSE 2
+  END,
+  speciality
+LIMIT 20
+`
+
+func (q *Queries) SearchMedicationsBySpeciality(ctx context.Context, speciality string) ([]Medication, error) {
+	rows, err := q.db.Query(ctx, searchMedicationsBySpeciality, speciality)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Medication
+	for rows.Next() {
+		var i Medication
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.CommercialStatus,
+			&i.Speciality,
+			&i.Dosage,
+			&i.Form,
+			&i.Presentation,
+			&i.Pp,
+			&i.ActiveSubstance,
+			&i.TherapeuticClass,
+			&i.Epi,
+			&i.Ppv,
+			&i.Ph,
+			&i.Pfht,
+			&i.Code,
+			&i.Tva,
+			&i.CreatedAt,
+			&i.Description,
+			&i.CommonSd,
+			&i.SeriousSd,
+			&i.GeneralInfo,
+			&i.CategoryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchMedicationsWithPriority = `-- name: SearchMedicationsWithPriority :many
+SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info, category_id FROM medications
+WHERE
+  speciality ILIKE $1 OR
+  active_substance ILIKE $1 OR
+  presentation ILIKE $1 OR
+  therapeutic_class ILIKE $1 OR
+  code ILIKE $1
+ORDER BY 
+  CASE 
+    WHEN speciality ILIKE $1 THEN 1
+    WHEN active_substance ILIKE $1 THEN 2
+    WHEN presentation ILIKE $1 THEN 3
+    WHEN therapeutic_class ILIKE $1 THEN 4
+    WHEN code ILIKE $1 THEN 5
+    ELSE 6
+  END,
+  speciality
+LIMIT 20
+`
+
+func (q *Queries) SearchMedicationsWithPriority(ctx context.Context, speciality string) ([]Medication, error) {
+	rows, err := q.db.Query(ctx, searchMedicationsWithPriority, speciality)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Medication
+	for rows.Next() {
+		var i Medication
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.CommercialStatus,
+			&i.Speciality,
+			&i.Dosage,
+			&i.Form,
+			&i.Presentation,
+			&i.Pp,
+			&i.ActiveSubstance,
+			&i.TherapeuticClass,
+			&i.Epi,
+			&i.Ppv,
+			&i.Ph,
+			&i.Pfht,
+			&i.Code,
+			&i.Tva,
+			&i.CreatedAt,
+			&i.Description,
+			&i.CommonSd,
+			&i.SeriousSd,
+			&i.GeneralInfo,
+			&i.CategoryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateMedication = `-- name: UpdateMedication :one
 UPDATE medications
 SET

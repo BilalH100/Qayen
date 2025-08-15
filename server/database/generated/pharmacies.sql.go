@@ -14,7 +14,7 @@ import (
 const createPharmacy = `-- name: CreatePharmacy :one
 INSERT INTO pharmacies (name, address, latitude, longitude, city, phone)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, address, latitude, longitude, city, phone, created_at
+RETURNING id, name, address, latitude, longitude, city, phone, created_at, opening_time, closing_time, is_24h, closed_days
 `
 
 type CreatePharmacyParams struct {
@@ -45,6 +45,10 @@ func (q *Queries) CreatePharmacy(ctx context.Context, arg CreatePharmacyParams) 
 		&i.City,
 		&i.Phone,
 		&i.CreatedAt,
+		&i.OpeningTime,
+		&i.ClosingTime,
+		&i.Is24h,
+		&i.ClosedDays,
 	)
 	return i, err
 }
@@ -60,7 +64,7 @@ func (q *Queries) DeletePharmacy(ctx context.Context, id int32) error {
 
 const getClosestPharmacyWithMedication = `-- name: GetClosestPharmacyWithMedication :one
 SELECT
-  p.id, p.name, p.address, p.latitude, p.longitude, p.city, p.phone, p.created_at,
+  p.id, p.name, p.address, p.latitude, p.longitude, p.city, p.phone, p.created_at, p.opening_time, p.closing_time, p.is_24h, p.closed_days,
   (
     6371 * acos(
       cos(radians($1)) *
@@ -85,15 +89,19 @@ type GetClosestPharmacyWithMedicationParams struct {
 }
 
 type GetClosestPharmacyWithMedicationRow struct {
-	ID         int32
-	Name       string
-	Address    string
-	Latitude   pgtype.Float8
-	Longitude  pgtype.Float8
-	City       string
-	Phone      string
-	CreatedAt  pgtype.Timestamp
-	DistanceKm int32
+	ID          int32
+	Name        string
+	Address     string
+	Latitude    pgtype.Float8
+	Longitude   pgtype.Float8
+	City        string
+	Phone       string
+	CreatedAt   pgtype.Timestamp
+	OpeningTime pgtype.Time
+	ClosingTime pgtype.Time
+	Is24h       pgtype.Bool
+	ClosedDays  []int32
+	DistanceKm  int32
 }
 
 func (q *Queries) GetClosestPharmacyWithMedication(ctx context.Context, arg GetClosestPharmacyWithMedicationParams) (GetClosestPharmacyWithMedicationRow, error) {
@@ -108,13 +116,17 @@ func (q *Queries) GetClosestPharmacyWithMedication(ctx context.Context, arg GetC
 		&i.City,
 		&i.Phone,
 		&i.CreatedAt,
+		&i.OpeningTime,
+		&i.ClosingTime,
+		&i.Is24h,
+		&i.ClosedDays,
 		&i.DistanceKm,
 	)
 	return i, err
 }
 
 const getPharmacyByID = `-- name: GetPharmacyByID :one
-SELECT id, name, address, latitude, longitude, city, phone, created_at FROM pharmacies WHERE id = $1
+SELECT id, name, address, latitude, longitude, city, phone, created_at, opening_time, closing_time, is_24h, closed_days FROM pharmacies WHERE id = $1
 `
 
 func (q *Queries) GetPharmacyByID(ctx context.Context, id int32) (Pharmacy, error) {
@@ -129,12 +141,16 @@ func (q *Queries) GetPharmacyByID(ctx context.Context, id int32) (Pharmacy, erro
 		&i.City,
 		&i.Phone,
 		&i.CreatedAt,
+		&i.OpeningTime,
+		&i.ClosingTime,
+		&i.Is24h,
+		&i.ClosedDays,
 	)
 	return i, err
 }
 
 const listPharmacies = `-- name: ListPharmacies :many
-SELECT id, name, address, latitude, longitude, city, phone, created_at FROM pharmacies ORDER BY id
+SELECT id, name, address, latitude, longitude, city, phone, created_at, opening_time, closing_time, is_24h, closed_days FROM pharmacies ORDER BY id
 `
 
 func (q *Queries) ListPharmacies(ctx context.Context) ([]Pharmacy, error) {
@@ -155,6 +171,10 @@ func (q *Queries) ListPharmacies(ctx context.Context) ([]Pharmacy, error) {
 			&i.City,
 			&i.Phone,
 			&i.CreatedAt,
+			&i.OpeningTime,
+			&i.ClosingTime,
+			&i.Is24h,
+			&i.ClosedDays,
 		); err != nil {
 			return nil, err
 		}
@@ -170,7 +190,7 @@ const updatePharmacy = `-- name: UpdatePharmacy :one
 UPDATE pharmacies
 SET name = $2, address = $3, latitude = $4, longitude = $5, city = $6, phone = $7
 WHERE id = $1
-RETURNING id, name, address, latitude, longitude, city, phone, created_at
+RETURNING id, name, address, latitude, longitude, city, phone, created_at, opening_time, closing_time, is_24h, closed_days
 `
 
 type UpdatePharmacyParams struct {
@@ -203,6 +223,10 @@ func (q *Queries) UpdatePharmacy(ctx context.Context, arg UpdatePharmacyParams) 
 		&i.City,
 		&i.Phone,
 		&i.CreatedAt,
+		&i.OpeningTime,
+		&i.ClosingTime,
+		&i.Is24h,
+		&i.ClosedDays,
 	)
 	return i, err
 }

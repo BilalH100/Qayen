@@ -8,6 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AlertRateLimit struct {
+	ID              int32
+	PharmacyID      pgtype.Int4
+	MedicationID    pgtype.Int4
+	LastAlertSent   pgtype.Timestamp
+	AlertCountToday pgtype.Int4
+}
+
 type Category struct {
 	ID   int32
 	Name string
@@ -38,15 +46,64 @@ type Medication struct {
 	CategoryID       pgtype.Int4
 }
 
+type MedicationAlert struct {
+	ID                      int32
+	CustomerID              pgtype.Int4
+	MedicationID            pgtype.Int4
+	CustomerLatitude        float64
+	CustomerLongitude       float64
+	SearchRadiusKm          pgtype.Float8
+	MaxResponseTimeMinutes  pgtype.Int4
+	Status                  string
+	CreatedAt               pgtype.Timestamp
+	ExpiresAt               pgtype.Timestamp
+	TotalPharmaciesNotified pgtype.Int4
+	TotalResponsesReceived  pgtype.Int4
+}
+
+type PharmacistResponse struct {
+	ID                     int32
+	AlertID                pgtype.Int4
+	PharmacyID             pgtype.Int4
+	ResponseType           string
+	SubstituteMedicationID pgtype.Int4
+	SubstituteBrand        string
+	SubstituteNotes        string
+	ResponseTimeSeconds    pgtype.Int4
+	RespondedAt            pgtype.Timestamp
+	ExpiresAt              pgtype.Timestamp
+}
+
 type Pharmacy struct {
-	ID        int32
-	Name      string
-	Address   string
-	Latitude  pgtype.Float8
-	Longitude pgtype.Float8
-	City      string
-	Phone     string
-	CreatedAt pgtype.Timestamp
+	ID          int32
+	Name        string
+	Address     string
+	Latitude    pgtype.Float8
+	Longitude   pgtype.Float8
+	City        string
+	Phone       string
+	CreatedAt   pgtype.Timestamp
+	OpeningTime pgtype.Time
+	ClosingTime pgtype.Time
+	Is24h       pgtype.Bool
+	ClosedDays  []int32
+}
+
+type PharmacyAlertNotification struct {
+	ID         int32
+	AlertID    pgtype.Int4
+	PharmacyID pgtype.Int4
+	SentAt     pgtype.Timestamp
+}
+
+type PharmacyAnalytic struct {
+	ID                     int32
+	PharmacyID             pgtype.Int4
+	Date                   pgtype.Date
+	TotalAlertsReceived    pgtype.Int4
+	TotalResponsesSent     pgtype.Int4
+	AvgResponseTimeSeconds pgtype.Float8
+	AvailabilityRate       pgtype.Float8
 }
 
 type Stock struct {

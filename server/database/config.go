@@ -2,11 +2,12 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"kayena/server/config"
 	"kayena/server/services"
 
-	"errors"
+	log "github.com/charmbracelet/log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,22 +28,21 @@ func ConnectDb(c *config.Config) (*pgxpool.Pool, error) {
 	return DbConn, nil
 }
 
-func SeedDb(s *services.Services) error {
+func SeedDb(s *services.Services, logger *log.Logger) error {
 	ctx := context.Background()
 	_, err := s.MedService.GetMedicationByCode(ctx, "1")
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			fmt.Println("Seeding meds ...")
+			logger.Info("Seeding meds ...")
 			err = SeedMedications(ctx, s.MedService)
 			if err != nil {
-
 				return fmt.Errorf("error seeding medications : %w", err)
 			}
 		} else {
 			return fmt.Errorf("seeding check failed: %w", err)
 		}
 	}
-	fmt.Println("medications already seeded skipping ...")
+	logger.Info("medications already seeded skipping ...")
 	_, err = s.PharmacyService.GetByIdService(ctx, 1)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

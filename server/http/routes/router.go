@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"kayena/server/http/handlers"
 	"kayena/server/services"
 	"net/http"
 
@@ -25,6 +26,12 @@ func NewRouter(s *services.Services) http.Handler {
 		r.Mount("/users", UserRouter(s.UserService))
 		r.Mount("/meds", MedRouter(s.MedService))
 		r.Mount("/pharmacies", PharmacyRouter(s.PharmacyService))
+		
+		if s.AlertService != nil {
+			alertHandler := handlers.NewAlertHandler(s.AlertService)
+			r.Mount("/alerts", AlertRoutes(alertHandler))
+			r.Mount("/pharmacy", PharmacyAlertRoutes(alertHandler))
+		}
 	})
 
 	return router
