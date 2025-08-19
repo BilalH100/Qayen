@@ -211,6 +211,108 @@ func (q *Queries) ExpireMedicationAlert(ctx context.Context, id int32) error {
 	return err
 }
 
+const getActiveAlertsForPharmacy = `-- name: GetActiveAlertsForPharmacy :many
+SELECT 
+  ma.id as alert_id,
+  u.name as customer_name,
+  u.phone as customer_phone,
+  m.presentation as medication_name,
+  m.speciality as medication_speciality,
+  m.dosage as medication_dosage,
+  m.form as medication_form,
+  ma.customer_latitude,
+  ma.customer_longitude,
+  ma.search_radius_km,
+  ma.created_at,
+  ma.expires_at,
+  ma.status,
+  ma.max_response_time_minutes
+FROM medication_alerts ma
+JOIN users u ON ma.customer_id = u.id
+JOIN medications m ON ma.medication_id = m.id
+WHERE ma.status = 'pending' 
+  AND ma.expires_at > now()
+  AND (
+    6371 * acos(
+      cos(radians($2)) *
+      cos(radians(ma.customer_latitude)) *
+      cos(radians(ma.customer_longitude) - radians($3)) +
+      sin(radians($2)) *
+      sin(radians(ma.customer_latitude))
+    )
+  ) <= $4
+  AND ma.id NOT IN (
+    SELECT pr.alert_id 
+    FROM pharmacist_responses pr 
+    WHERE pr.pharmacy_id = $1
+  )
+ORDER BY ma.created_at ASC
+`
+
+type GetActiveAlertsForPharmacyParams struct {
+	PharmacyID       pgtype.Int4
+	Radians          float64
+	Radians_2        float64
+	CustomerLatitude float64
+}
+
+type GetActiveAlertsForPharmacyRow struct {
+	AlertID                int32
+	CustomerName           string
+	CustomerPhone          string
+	MedicationName         string
+	MedicationSpeciality   string
+	MedicationDosage       string
+	MedicationForm         string
+	CustomerLatitude       float64
+	CustomerLongitude      float64
+	SearchRadiusKm         pgtype.Float8
+	CreatedAt              pgtype.Timestamp
+	ExpiresAt              pgtype.Timestamp
+	Status                 string
+	MaxResponseTimeMinutes pgtype.Int4
+}
+
+func (q *Queries) GetActiveAlertsForPharmacy(ctx context.Context, arg GetActiveAlertsForPharmacyParams) ([]GetActiveAlertsForPharmacyRow, error) {
+	rows, err := q.db.Query(ctx, getActiveAlertsForPharmacy,
+		arg.PharmacyID,
+		arg.Radians,
+		arg.Radians_2,
+		arg.CustomerLatitude,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActiveAlertsForPharmacyRow
+	for rows.Next() {
+		var i GetActiveAlertsForPharmacyRow
+		if err := rows.Scan(
+			&i.AlertID,
+			&i.CustomerName,
+			&i.CustomerPhone,
+			&i.MedicationName,
+			&i.MedicationSpeciality,
+			&i.MedicationDosage,
+			&i.MedicationForm,
+			&i.CustomerLatitude,
+			&i.CustomerLongitude,
+			&i.SearchRadiusKm,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.Status,
+			&i.MaxResponseTimeMinutes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getActiveMedicationAlerts = `-- name: GetActiveMedicationAlerts :many
 SELECT id, customer_id, medication_id, customer_latitude, customer_longitude, search_radius_km, max_response_time_minutes, status, created_at, expires_at, total_pharmacies_notified, total_responses_received FROM medication_alerts 
 WHERE status = 'pending' AND expires_at > now()

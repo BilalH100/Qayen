@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"kayena/server/services"
 	"kayena/server/utils"
 	"net/http"
@@ -21,43 +22,51 @@ func NewAlertHandler(alertService *services.AlertService) *AlertHandler {
 	}
 }
 
-// CreateMedicationAlert handles POST /api/alerts
 func (h *AlertHandler) CreateMedicationAlert(w http.ResponseWriter, r *http.Request) {
 	var req services.AlertRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid JSON in request body: "+err.Error())
+		return
+	}
+	if req.CustomerID == 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Customer ID is required")
 		return
 	}
 
-	// Validate request
-	if req.CustomerID == 0 || req.MedicationID == 0 {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Customer ID and Medication ID are required")
+	if req.MedicationID == 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Medication ID is required")
 		return
 	}
 
-	if req.Latitude == 0 || req.Longitude == 0 {
+	if req.Latitude == 0 && req.Longitude == 0 {
 		utils.ErrorResponse(w, http.StatusBadRequest, "Location coordinates are required")
 		return
 	}
 
-	// Set defaults
-	if req.SearchRadius == 0 {
+	if req.SearchRadius <= 0 {
 		req.SearchRadius = 10.0 // 10km default
 	}
-	if req.MaxResponseTime == 0 {
+	if req.MaxResponseTime <= 0 {
 		req.MaxResponseTime = 2 // 2 minutes default
+	}
+
+	// Limit search radius to reasonable bounds
+	if req.SearchRadius > 100 {
+		req.SearchRadius = 100
 	}
 
 	result, err := h.alertService.CreateMedicationAlert(r.Context(), req)
 	if err != nil {
-		utils.ErrorResponse(w, http.StatusInternalServerError, "Failed to create alert: "+err.Error())
+		h.handleAlertError(w, err, "Failed to create medication alert")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"data":    result,
+		"message": "Medication alert created successfully",
 	})
 }
 
@@ -66,29 +75,39 @@ func (h *AlertHandler) GetAlertResults(w http.ResponseWriter, r *http.Request) {
 	alertIDStr := chi.URLParam(r, "id")
 	alertID, err := strconv.ParseInt(alertIDStr, 10, 32)
 	if err != nil {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid alert ID")
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid alert ID format: must be a positive integer")
+		return
+	}
+
+	if alertID <= 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Alert ID must be positive")
 		return
 	}
 
 	// Get customer location from query params for distance calculation
 	latStr := r.URL.Query().Get("lat")
 	lngStr := r.URL.Query().Get("lng")
-	
-	lat, err := strconv.ParseFloat(latStr, 64)
-	if err != nil {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid latitude")
+
+	if latStr == "" || lngStr == "" {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Customer location (lat, lng) query parameters are required")
 		return
 	}
-	
+
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid latitude format: "+err.Error())
+		return
+	}
+
 	lng, err := strconv.ParseFloat(lngStr, 64)
 	if err != nil {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid longitude")
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid longitude format: "+err.Error())
 		return
 	}
 
 	result, err := h.alertService.GetAlertResults(r.Context(), int32(alertID), lat, lng)
 	if err != nil {
-		utils.ErrorResponse(w, http.StatusInternalServerError, "Failed to get alert results: "+err.Error())
+		h.handleAlertError(w, err, "Failed to get alert results")
 		return
 	}
 
@@ -104,45 +123,64 @@ func (h *AlertHandler) SubmitPharmacistResponse(w http.ResponseWriter, r *http.R
 	alertIDStr := chi.URLParam(r, "id")
 	alertID, err := strconv.ParseInt(alertIDStr, 10, 32)
 	if err != nil {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid alert ID")
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid alert ID format: must be a positive integer")
+		return
+	}
+
+	if alertID <= 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Alert ID must be positive")
 		return
 	}
 
 	var req services.PharmacistResponseRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid JSON in request body: "+err.Error())
 		return
 	}
 
-	// Set alert ID from URL
+	// Set alert ID from URL parameter
 	req.AlertID = int32(alertID)
 
-	// Validate request
-	if req.PharmacyID == 0 {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Pharmacy ID is required")
+	// Basic validation (detailed validation is done in service layer)
+	if req.PharmacyID <= 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Valid pharmacy ID is required")
 		return
 	}
 
-	if req.ResponseType != "available" && req.ResponseType != "unavailable" && req.ResponseType != "substitute" {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid response type")
+	validResponseTypes := []string{"available", "unavailable", "substitute"}
+	validType := false
+	for _, vt := range validResponseTypes {
+		if req.ResponseType == vt {
+			validType = true
+			break
+		}
+	}
+	if !validType {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid response type. Valid types: available, unavailable, substitute")
 		return
 	}
 
-	if req.ResponseType == "substitute" && req.SubstituteMedicationID == nil && req.SubstituteBrand == "" {
-		utils.ErrorResponse(w, http.StatusBadRequest, "Substitute details are required for substitute responses")
-		return
+	// Set response time if not provided (time since alert was received)
+	if req.ResponseTimeSeconds <= 0 {
+		req.ResponseTimeSeconds = 30 // Default 30 seconds response time
 	}
 
 	err = h.alertService.SubmitPharmacistResponse(r.Context(), req)
 	if err != nil {
-		utils.ErrorResponse(w, http.StatusInternalServerError, "Failed to submit response: "+err.Error())
+		h.handleAlertError(w, err, "Failed to submit pharmacist response")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": "Response submitted successfully",
+		"message": "Pharmacist response submitted successfully",
+		"data": map[string]interface{}{
+			"alert_id":      req.AlertID,
+			"pharmacy_id":   req.PharmacyID,
+			"response_type": req.ResponseType,
+		},
 	})
 }
 
@@ -161,11 +199,11 @@ func (h *AlertHandler) GetPharmacyDashboard(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
-			"pharmacy_id": pharmacyID,
+			"pharmacy_id":    pharmacyID,
 			"pending_alerts": []interface{}{}, // TODO: Implement GetPharmacyDashboardAlerts
 			"today_stats": map[string]interface{}{
-				"alerts_received": 0,
-				"responses_sent":  0,
+				"alerts_received":   0,
+				"responses_sent":    0,
 				"avg_response_time": 0,
 				"availability_rate": 0,
 			},
@@ -240,7 +278,7 @@ func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request)
 
 	// TODO: Register this client for real-time notifications
 	// This would integrate with a WebSocket manager or pub/sub system
-	
+
 	// Keep connection alive and send heartbeat
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -279,7 +317,7 @@ func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request)
 	clientChan := make(chan string, 10)
 
 	// TODO: Register this client for real-time notifications about this alert
-	
+
 	// Keep connection alive and send heartbeat
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -296,5 +334,48 @@ func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request)
 			// Client disconnected
 			return
 		}
+	}
+}
+
+// Helper function to handle AlertError types and return appropriate HTTP responses
+func (h *AlertHandler) handleAlertError(w http.ResponseWriter, err error, defaultMessage string) {
+	var alertErr *services.AlertError
+	if errors.As(err, &alertErr) {
+		var statusCode int
+		switch alertErr.Code {
+		case "VALIDATION_ERROR":
+			statusCode = http.StatusBadRequest
+		case "NOT_FOUND":
+			statusCode = http.StatusNotFound
+		case "BUSINESS_LOGIC_ERROR":
+			statusCode = http.StatusConflict
+		case "DATABASE_ERROR":
+			statusCode = http.StatusInternalServerError
+		case "INTERNAL_ERROR":
+			statusCode = http.StatusInternalServerError
+		default:
+			statusCode = http.StatusInternalServerError
+		}
+
+		// Create detailed error response
+		errorResponse := map[string]interface{}{
+			"success": false,
+			"error": map[string]interface{}{
+				"code":      alertErr.Code,
+				"message":   alertErr.Message,
+				"operation": alertErr.Operation,
+			},
+		}
+
+		if alertErr.Details != "" {
+			errorResponse["error"].(map[string]interface{})["details"] = alertErr.Details
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		json.NewEncoder(w).Encode(errorResponse)
+	} else {
+		// Fallback for non-AlertError types
+		utils.ErrorResponse(w, http.StatusInternalServerError, defaultMessage+": "+err.Error())
 	}
 }

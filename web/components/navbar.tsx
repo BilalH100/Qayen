@@ -46,6 +46,9 @@ export function Navbar() {
               <Link href="/pharmacies" className="text-lg font-semibold">
                 Pharmacies
               </Link>
+              <Link href="/pharmacy" className="text-lg font-semibold">
+                Pharmacy Dashboard
+              </Link>
               <Link href="/about" className="text-lg font-semibold">
                 About
               </Link>
@@ -95,6 +98,9 @@ export function Navbar() {
           </Link>
           <Link href="/pharmacies" className="transition-colors hover:text-foreground/80">
             Pharmacies
+          </Link>
+          <Link href="/pharmacy" className="transition-colors hover:text-foreground/80">
+            Pharmacy Dashboard
           </Link>
           <Link href="/about" className="transition-colors hover:text-foreground/80">
             About
