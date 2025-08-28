@@ -45,12 +45,21 @@ type Stock struct {
 	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
 }
 
+type Role string
+
+const (
+	Regular    Role = "regular"
+	Pharmacist Role = "pharmacist"
+	Admin      Role = "admin"
+)
+
 type User struct {
 	ID        int32            `json:"id"`
 	Password  string           `json:"password"`
 	Email     string           `json:"email"`
 	Name      string           `json:"name"`
 	Phone     string           `json:"phone"`
+	Role      Role             `json:"role"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 }
 

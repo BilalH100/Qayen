@@ -11,7 +11,10 @@ import (
 func UserRouter(s services.UserService) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/id/{id}", handlers.GetUserProfileHandler(s))
+	r.Get("/list", handlers.ListAllUsersHandler(s))
 	r.Post("/register", handlers.CreateUserHandler(s))
 	r.Post("/login", handlers.LoginHandler(s))
+	r.Delete("/id/{id}", handlers.DeleteUserHandler(s))
+	r.Put("/role/id/{id}", handlers.UpdateUserRole(s))
 	return r
 }

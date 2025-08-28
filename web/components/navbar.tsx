@@ -1,29 +1,29 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
-import { Menu, X, Search, User, ShoppingCart, Pill } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { AuthModal } from "@/components/auth-modal"
-import { UserMenu } from "@/components/user-menu"
-import { useAuth } from "@/contexts/auth-context"
-import Image from "next/image"
-import logo from "../public/logo.png"
+import { useState } from "react";
+import Link from "next/link";
+import { Menu, X, Search, User, ShoppingCart, Pill } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { AuthModal } from "@/components/auth-modal";
+import { UserMenu } from "@/components/user-menu";
+import { useAuth } from "@/contexts/auth-context";
+import { ROLES } from "@/utils/types";
 
 export function Navbar() {
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-  const [authMode, setAuthMode] = useState<"login" | "register">("login")
-  
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+
+  const { user, isAuthenticated, isLoading } = useAuth();
+  console.log(user);
 
   const handleAuthClick = (mode: "login" | "register") => {
-    setAuthMode(mode)
-    setIsAuthModalOpen(true)
-  }
+    setAuthMode(mode);
+    setIsAuthModalOpen(true);
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -46,16 +46,18 @@ export function Navbar() {
               <Link href="/pharmacies" className="text-lg font-semibold">
                 Pharmacies
               </Link>
-              <Link href="/pharmacy" className="text-lg font-semibold">
-                Pharmacy Dashboard
-              </Link>
+              {user?.role === ROLES.PHARMACIST && (
+                <Link href="/pharmacy" className="text-lg font-semibold">
+                  Pharmacy Dashboard
+                </Link>
+              )}
               <Link href="/about" className="text-lg font-semibold">
                 About
               </Link>
               <Link href="/contact" className="text-lg font-semibold">
                 Contact
               </Link>
-              
+
               <div className="mt-8 pt-4 border-t">
                 {isAuthenticated ? (
                   <div className="space-y-2">
@@ -65,14 +67,14 @@ export function Navbar() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <Button 
+                    <Button
                       className="w-full bg-teal-600 hover:bg-teal-700"
                       onClick={() => handleAuthClick("login")}
                     >
                       Sign In
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="w-full"
                       onClick={() => handleAuthClick("register")}
                     >
@@ -89,23 +91,52 @@ export function Navbar() {
           {/* <div className="bg-teal-600 text-white p-1 rounded">
             <Image src={logo} alt={""} height={50} width={50}/>
           </div> */}
-          <span className="font-bold text-xl hidden sm:inline-block p-2">Kayena</span>
+          <span className="font-bold text-xl hidden sm:inline-block p-2">
+            Kayena
+          </span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium flex-1">
-          <Link href="/medications" className="transition-colors hover:text-foreground/80">
+          <Link
+            href="/medications"
+            className="transition-colors hover:text-foreground/80"
+          >
             Medications
           </Link>
-          <Link href="/pharmacies" className="transition-colors hover:text-foreground/80">
+
+          <Link
+            href="/pharmacies"
+            className="transition-colors hover:text-foreground/80"
+          >
             Pharmacies
           </Link>
-          <Link href="/pharmacy" className="transition-colors hover:text-foreground/80">
-            Pharmacy Dashboard
-          </Link>
-          <Link href="/about" className="transition-colors hover:text-foreground/80">
+
+          {user?.role === ROLES.PHARMACIST && (
+            <Link
+              href="/pharmacy"
+              className="transition-colors hover:text-foreground/80"
+            >
+              Pharmacy Dashboard
+            </Link>
+          )}
+          {user?.role === ROLES.ADMIN && (
+            <Link
+              href="/admin"
+              className="transition-colors hover:text-foreground/80"
+            >
+              Admin Dashboard
+            </Link>
+          )}
+          <Link
+            href="/about"
+            className="transition-colors hover:text-foreground/80"
+          >
             About
           </Link>
-          <Link href="/contact" className="transition-colors hover:text-foreground/80">
+          <Link
+            href="/contact"
+            className="transition-colors hover:text-foreground/80"
+          >
             Contact
           </Link>
         </nav>
@@ -119,12 +150,21 @@ export function Navbar() {
                 autoFocus
                 onBlur={() => setIsSearchOpen(false)}
               />
-              <Button variant="ghost" size="icon" className="absolute right-0" onClick={() => setIsSearchOpen(false)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-0"
+                onClick={() => setIsSearchOpen(false)}
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>
           ) : (
-            <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(true)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsSearchOpen(true)}
+            >
               <Search className="h-5 w-5" />
               <span className="sr-only">Search</span>
             </Button>
@@ -134,22 +174,22 @@ export function Navbar() {
             <ShoppingCart className="h-5 w-5" />
             <span className="sr-only">Cart</span>
           </Button>
-          
+
           {isLoading ? (
             <div className="w-8 h-8 animate-pulse bg-gray-200 rounded-full" />
           ) : isAuthenticated ? (
             <UserMenu />
           ) : (
             <>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="icon"
                 onClick={() => handleAuthClick("login")}
               >
                 <User className="h-5 w-5" />
                 <span className="sr-only">Account</span>
               </Button>
-              <Button 
+              <Button
                 className="hidden md:flex bg-teal-600 hover:bg-teal-700"
                 onClick={() => handleAuthClick("login")}
               >
@@ -159,12 +199,12 @@ export function Navbar() {
           )}
         </div>
       </div>
-      
+
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         initialMode={authMode}
       />
     </header>
-  )
+  );
 }

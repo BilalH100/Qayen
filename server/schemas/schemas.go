@@ -1,5 +1,7 @@
 package schemas
 
+import "kayena/server/models"
+
 type MedicationJson struct {
 	ID               int32  `json:"id"`
 	Status           string `json:"statut_amm"`
@@ -87,10 +89,11 @@ type Message struct {
 }
 
 type GetUserResponse struct {
-	Id    int32  `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
+	Id    int32       `json:"id"`
+	Email string      `json:"email"`
+	Name  string      `json:"name"`
+	Phone string      `json:"phone"`
+	Role  models.Role `json:"role"`
 }
 
 type Options struct {
@@ -101,4 +104,8 @@ type Options struct {
 type LoginResponse struct {
 	Token string          `json:"token"`
 	User  GetUserResponse `json:"user"`
+}
+
+type UpdateUserRoleRequest struct {
+	Role string `json:"role" validate:"required,oneof=regular pharmacist admin"`
 }

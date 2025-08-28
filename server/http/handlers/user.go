@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -44,8 +45,8 @@ func CreateUserHandler(s services.UserService) http.HandlerFunc {
 			Email:    req.Email,
 			Phone:    req.Phone,
 			Password: string(hashedPass),
+			Role:     models.Regular,
 		}
-
 		if err := s.RegisterUser(r.Context(), user); err != nil {
 			httpx.RespondWithError(w, fmt.Errorf("failed to register user: %w", err))
 			return
@@ -85,6 +86,7 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 					Name:  user.Name,
 					Email: user.Email,
 					Id:    user.ID,
+					Role:  user.Role,
 				},
 			})
 		} else if errors.Is(err, pgx.ErrNoRows) {
@@ -117,5 +119,77 @@ func GetUserProfileHandler(s services.UserService) http.HandlerFunc {
 			Name:  user.Name,
 			Phone: user.Phone,
 		})
+	}
+}
+
+func ListAllUsersHandler(s services.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pageStr := r.URL.Query().Get("page")
+		limitStr := r.URL.Query().Get("limit")
+
+		page, _ := strconv.Atoi(pageStr)
+		limit, _ := strconv.Atoi(limitStr)
+		if page < 1 {
+			page = 1
+		}
+		if limit < 1 {
+			limit = 10
+		}
+		offset := (page - 1) * limit
+
+		res, err := s.List(r.Context(), schemas.Options{
+			Limit:  int32(limit),
+			Offset: int32(offset),
+		})
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("Error getting user list"))
+			return
+		}
+		users := make(map[string][]models.User)
+		users["users"] = res
+		httpx.RespondWithJSON(w, http.StatusOK, users)
+	}
+}
+
+func DeleteUserHandler(s services.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idstr := chi.URLParam(r, "id")
+		if idstr == "" {
+			httpx.RespondWithError(w, fmt.Errorf("user id cannot be empty"))
+			return
+		}
+		id, err := strconv.Atoi(idstr)
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
+			return
+		}
+		err = s.DeleteUser(r.Context(), int32(id))
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
+			return
+		}
+		httpx.RespondWithJSON(w, http.StatusOK, nil)
+	}
+}
+
+func UpdateUserRole(s services.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idstr := chi.URLParam(r, "id")
+		var req schemas.UpdateUserRoleRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("Invalid request body :%w", err))
+			return
+		}
+		id, err := strconv.Atoi(idstr)
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
+			return
+		}
+		user, err := s.UpdateUserRole(r.Context(), int32(id), models.Role(req.Role))
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
+			return
+		}
+		httpx.RespondWithJSON(w, http.StatusOK, *user)
 	}
 }

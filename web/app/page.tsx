@@ -154,7 +154,7 @@ export default function Home() {
                 <MedicationCard
                   key={medication.id}
                   id={medication.id}
-                  name={medication.presentation}
+                  name={medication.speciality}
                   category={medication.therapeutic_class}
                   form={medication.form}
                   presentation={medication.presentation}
@@ -163,7 +163,6 @@ export default function Home() {
                 />
               ))
             ) : (
-              // Fallback content while loading
               Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="bg-slate-100 dark:bg-slate-800 rounded-lg p-6 animate-pulse">
                   <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded mb-2"></div>

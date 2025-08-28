@@ -21,3 +21,9 @@ interface Medication {
   serious_sd: string[];
   general_info: string[];
 }
+
+export const ROLES = {
+  REGULAR: "regular",
+  PHARMACIST: "pharmacist",
+  ADMIN: "admin",
+} as const;

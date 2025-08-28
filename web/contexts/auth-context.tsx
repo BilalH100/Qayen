@@ -4,19 +4,25 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { BASE_URL } from "@/utils/api";
-
+import { ROLES } from "@/utils/types";
 interface User {
   id: string;
   email: string;
   name: string;
   phone: string;
+  role: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, phone: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    phone: string,
+  ) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -32,12 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userData = localStorage.getItem("user");
-    
+
     if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       } catch (error) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
@@ -59,9 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(userData));
-        
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
+
+        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
         setUser(userData);
         toast.success(`Welcome back, ${userData.name}!`);
       } else {
@@ -73,7 +79,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (email: string, password: string, name: string, phone: string) => {
+  const register = async (
+    email: string,
+    password: string,
+    name: string,
+    phone: string,
+  ) => {
     try {
       const response = await axios.post(`${BASE_URL}/users/register`, {
         email,
@@ -97,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    delete axios.defaults.headers.common['Authorization'];
+    delete axios.defaults.headers.common["Authorization"];
     setUser(null);
     toast.success("You've been signed out successfully!");
   };
