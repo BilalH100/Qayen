@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Building, MapPin, Phone, Loader2 } from 'lucide-react';
+import { MapPin, Phone, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { BASE_URL } from '@/utils/api';
 
@@ -28,7 +28,7 @@ export default function PharmacySelection() {
         const response = await fetch(`${BASE_URL}/pharmacies`);
         if (response.ok) {
           const data = await response.json();
-          setPharmacies(data.slice(0, 12)); // Limit to first 12 pharmacies for better UX
+          setPharmacies(data.slice(0, 12)); 
         } else {
           throw new Error('Failed to fetch pharmacies');
         }
@@ -92,8 +92,8 @@ export default function PharmacySelection() {
           {pharmacies.map((pharmacy) => (
             <Card key={pharmacy.id} className="hover:shadow-lg transition-shadow border-slate-200 dark:border-slate-700">
               <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Building className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <CardTitle className="flex  text-lg">
+                  <div className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   <span className="truncate">{pharmacy.name}</span>
                 </CardTitle>
               </CardHeader>
@@ -132,7 +132,7 @@ export default function PharmacySelection() {
 
         {pharmacies.length === 0 && !loading && !error && (
           <div className="text-center py-12">
-            <Building className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+            <div className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
               No pharmacies found
             </h3>

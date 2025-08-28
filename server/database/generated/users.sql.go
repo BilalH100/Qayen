@@ -7,12 +7,14 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, name, phone, password, user_role)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, email, name, phone, password, created_at, user_role
+RETURNING id, email, name, phone, password, created_at, user_role, managed_pharmacy_id
 `
 
 type CreateUserParams struct {
@@ -40,6 +42,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Password,
 		&i.CreatedAt,
 		&i.UserRole,
+		&i.ManagedPharmacyID,
 	)
 	return i, err
 }
@@ -54,7 +57,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int32) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, phone, password, created_at, user_role FROM users WHERE email = $1
+SELECT id, email, name, phone, password, created_at, user_role, managed_pharmacy_id FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -68,12 +71,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Password,
 		&i.CreatedAt,
 		&i.UserRole,
+		&i.ManagedPharmacyID,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, name, phone, password, created_at, user_role FROM users WHERE id = $1
+SELECT id, email, name, phone, password, created_at, user_role, managed_pharmacy_id FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
@@ -87,12 +91,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.Password,
 		&i.CreatedAt,
 		&i.UserRole,
+		&i.ManagedPharmacyID,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, phone, password, created_at, user_role 
+SELECT id, email, name, phone, password, created_at, user_role, managed_pharmacy_id 
 FROM users
 ORDER BY id
 LIMIT $1
@@ -121,6 +126,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Password,
 			&i.CreatedAt,
 			&i.UserRole,
+			&i.ManagedPharmacyID,
 		); err != nil {
 			return nil, err
 		}
@@ -136,7 +142,7 @@ const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET name = $2, phone = $3
 WHERE id = $1
-RETURNING id, email, name, phone, password, created_at, user_role
+RETURNING id, email, name, phone, password, created_at, user_role, managed_pharmacy_id
 `
 
 type UpdateUserParams struct {
@@ -156,6 +162,35 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Password,
 		&i.CreatedAt,
 		&i.UserRole,
+		&i.ManagedPharmacyID,
+	)
+	return i, err
+}
+
+const updateUserManagedPharmacy = `-- name: UpdateUserManagedPharmacy :one
+UPDATE users 
+SET managed_pharmacy_id = $2
+WHERE id = $1
+RETURNING id, email, name, phone, password, created_at, user_role, managed_pharmacy_id
+`
+
+type UpdateUserManagedPharmacyParams struct {
+	ID                int32
+	ManagedPharmacyID pgtype.Int4
+}
+
+func (q *Queries) UpdateUserManagedPharmacy(ctx context.Context, arg UpdateUserManagedPharmacyParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserManagedPharmacy, arg.ID, arg.ManagedPharmacyID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Phone,
+		&i.Password,
+		&i.CreatedAt,
+		&i.UserRole,
+		&i.ManagedPharmacyID,
 	)
 	return i, err
 }
@@ -164,7 +199,7 @@ const updateUserRole = `-- name: UpdateUserRole :one
 UPDATE users 
 SET user_role = $2
 WHERE id = $1
-RETURNING id, email, name, phone, password, created_at, user_role
+RETURNING id, email, name, phone, password, created_at, user_role, managed_pharmacy_id
 `
 
 type UpdateUserRoleParams struct {
@@ -183,6 +218,7 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.Password,
 		&i.CreatedAt,
 		&i.UserRole,
+		&i.ManagedPharmacyID,
 	)
 	return i, err
 }

@@ -16,12 +16,14 @@ type GetClosestResponse struct {
 
 func GetAllPharmaciesHandler(s services.PharmacyService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pharmacies, err := s.GetAllService(r.Context())
+		res, err := s.GetAllService(r.Context())
 		if err != nil {
 			fmt.Println("error getting all pharmacies:", err)
 			httpx.RespondWithError(w, httpx.ErrInternal)
 			return
 		}
+		pharmacies := make(map[string][]schemas.Pharmacy)
+		pharmacies["pharmacies"] = res
 		httpx.RespondWithJSON(w, http.StatusOK, pharmacies)
 	}
 }

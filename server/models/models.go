@@ -54,13 +54,14 @@ const (
 )
 
 type User struct {
-	ID        int32            `json:"id"`
-	Password  string           `json:"password"`
-	Email     string           `json:"email"`
-	Name      string           `json:"name"`
-	Phone     string           `json:"phone"`
-	Role      Role             `json:"role"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
+	ID                int32            `json:"id"`
+	Password          string           `json:"password"`
+	Email             string           `json:"email"`
+	Name              string           `json:"name"`
+	Phone             string           `json:"phone"`
+	Role              Role             `json:"role"`
+	ManagedPharmacyID int32            `json:"managed_pharmacy"`
+	CreatedAt         pgtype.Timestamp `json:"created_at"`
 }
 
 type Category struct {

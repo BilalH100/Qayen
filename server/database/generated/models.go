@@ -161,11 +161,12 @@ type Stock struct {
 }
 
 type User struct {
-	ID        int32
-	Email     string
-	Name      string
-	Phone     string
-	Password  string
-	CreatedAt pgtype.Timestamp
-	UserRole  UserRole
+	ID                int32
+	Email             string
+	Name              string
+	Phone             string
+	Password          string
+	CreatedAt         pgtype.Timestamp
+	UserRole          UserRole
+	ManagedPharmacyID pgtype.Int4
 }

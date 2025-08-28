@@ -23,9 +23,11 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { AdminProtectedRoute } from "@/components/admin-protected-route";
 import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
+import { Search, MapPin, Clock } from "lucide-react";
 
 type User = {
   id: number;
@@ -33,6 +35,17 @@ type User = {
   email: string;
   role: string;
   phone: string;
+};
+
+type Pharmacy = {
+  id: number;
+  name: string;
+  address: string;
+  phone: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  is_on_duty: boolean;
 };
 
 type UserRole = "regular" | "pharmacist" | "admin";
@@ -55,6 +68,15 @@ function AdminDashboardContent() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [userToDelete, setUserToDelete] = React.useState<User | null>(null);
   const [deleting, setDeleting] = React.useState(false);
+
+  // Pharmacy assignment modal state
+  const [isPharmacyModalOpen, setIsPharmacyModalOpen] = React.useState(false);
+  const [pharmacies, setPharmacies] = React.useState<Pharmacy[]>([]);
+  const [filteredPharmacies, setFilteredPharmacies] = React.useState<Pharmacy[]>([]);
+  const [pharmacySearch, setPharmacySearch] = React.useState("");
+  const [selectedPharmacy, setSelectedPharmacy] = React.useState<Pharmacy | null>(null);
+  const [assigningPharmacy, setAssigningPharmacy] = React.useState(false);
+  const [pharmaciesLoading, setPharmaciesLoading] = React.useState(false);
 
   const { toast } = useToast();
   async function fetchUsers() {
@@ -89,6 +111,44 @@ function AdminDashboardContent() {
     fetchUsers();
   }, [page, limit]);
 
+  // Filter pharmacies based on search
+  React.useEffect(() => {
+    if (!pharmacySearch.trim()) {
+      setFilteredPharmacies(pharmacies);
+    } else {
+      const filtered = pharmacies.filter(pharmacy =>
+        pharmacy.name.toLowerCase().includes(pharmacySearch.toLowerCase()) ||
+        pharmacy.address.toLowerCase().includes(pharmacySearch.toLowerCase()) ||
+        pharmacy.city.toLowerCase().includes(pharmacySearch.toLowerCase())
+      );
+      setFilteredPharmacies(filtered);
+    }
+  }, [pharmacySearch, pharmacies]);
+
+  const fetchPharmacies = async () => {
+    setPharmaciesLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/pharmacies`);
+      if (res.ok) {
+        const data = await res.json();
+        setPharmacies(data.pharmacies || []);
+        setFilteredPharmacies(data.pharmacies || []);
+        console.log(pharmacies)
+      } else {
+        console.error('Failed to fetch pharmacies');
+        toast({
+          title: "Failed to load pharmacies",
+          description: "Please try again",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching pharmacies:', error);
+    } finally {
+      setPharmaciesLoading(false);
+    }
+  };
+
   const totalPages = Math.ceil(totalUsers / limit);
 
   const openEditModal = (user: User) => {
@@ -107,9 +167,18 @@ function AdminDashboardContent() {
   const updateUserRole = async () => {
     if (!selectedUser) return;
     
+    // If changing to pharmacist, open pharmacy assignment modal
+    if (selectedRole === "pharmacist" && selectedUser.role !== "pharmacist") {
+      closeModal();
+      setIsPharmacyModalOpen(true);
+      fetchPharmacies();
+      return;
+    }
+
+    // For other role changes, proceed normally
     setUpdating(true);
     try {
-      const res = await fetch(`${BASE_URL}/users/${selectedUser.id}/role`, {
+      const res = await fetch(`${BASE_URL}/users/id/${selectedUser.id}/role`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -127,6 +196,10 @@ function AdminDashboardContent() {
         );
         closeModal();
         fetchUsers();
+        toast({
+          title: "Role updated successfully",
+          description: `${selectedUser.name} is now a ${selectedRole}`,
+        });
       } else {
         console.error('Failed to update user role');
         toast({
@@ -151,6 +224,79 @@ function AdminDashboardContent() {
     setIsDeleteModalOpen(false);
     setUserToDelete(null);
     setDeleting(false);
+  };
+
+  const closePharmacyModal = () => {
+    setIsPharmacyModalOpen(false);
+    setSelectedPharmacy(null);
+    setPharmacySearch("");
+    setPharmacies([]);
+    setFilteredPharmacies([]);
+    setAssigningPharmacy(false);
+    // Reset the selected user and role
+    setSelectedUser(null);
+    setSelectedRole("regular");
+  };
+
+  const assignPharmacyToUser = async () => {
+    if (!selectedUser || !selectedPharmacy) return;
+
+    setAssigningPharmacy(true);
+    try {
+      // First update the user role to pharmacist
+      const roleRes = await fetch(`${BASE_URL}/users/${selectedUser.id}/role`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: "pharmacist" }),
+      });
+
+      if (!roleRes.ok) {
+        throw new Error('Failed to update user role');
+      }
+
+      // Then assign the pharmacy
+      const pharmacyRes = await fetch(`${BASE_URL}/users/${selectedUser.id}/assign-pharmacy`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pharmacy_id: selectedPharmacy.id }),
+      });
+
+      if (pharmacyRes.ok) {
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            user.id === selectedUser.id 
+              ? { ...user, role: "pharmacist" }
+              : user
+          )
+        );
+        closePharmacyModal();
+        fetchUsers();
+        toast({
+          title: "Pharmacist assigned successfully",
+          description: `${selectedUser.name} has been assigned to ${selectedPharmacy.name}`,
+        });
+      } else {
+        console.error('Failed to assign pharmacy');
+        toast({
+          title: "Pharmacy assignment failed",
+          description: "Role was updated but pharmacy assignment failed",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error assigning pharmacy:', error);
+      toast({
+        title: "Assignment failed",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setAssigningPharmacy(false);
+    }
   };
 
   const deleteUser = async () => {
@@ -495,6 +641,144 @@ function AdminDashboardContent() {
                   <>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete User
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Pharmacy Assignment Modal */}
+        <Dialog open={isPharmacyModalOpen} onOpenChange={setIsPharmacyModalOpen}>
+          <DialogContent className="sm:max-w-[600px] max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                Assign Pharmacy to {selectedUser?.name}
+              </DialogTitle>
+              <DialogDescription>
+                Select a pharmacy to assign to this pharmacist. They will be able to manage this pharmacy's inventory and orders.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+              {/* Search Input */}
+              <div className="space-y-2">
+                <Label htmlFor="pharmacy-search" className="text-sm font-medium">
+                  Search Pharmacies
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="pharmacy-search"
+                    placeholder="Search by name, address, or city..."
+                    value={pharmacySearch}
+                    onChange={(e) => setPharmacySearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              {/* Pharmacies List */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Available Pharmacies ({filteredPharmacies.length})
+                </Label>
+                
+                {pharmaciesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                    <span className="ml-3 text-slate-600 dark:text-slate-300">Loading pharmacies...</span>
+                  </div>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto border rounded-lg">
+                    {filteredPharmacies.length > 0 ? (
+                      <div className="space-y-0">
+                        {filteredPharmacies.map((pharmacy) => (
+                          <div
+                            key={pharmacy.id}
+                            className={`flex items-start space-x-3 p-4 border-b last:border-b-0 cursor-pointer transition-colors ${
+                              selectedPharmacy?.id === pharmacy.id
+                                ? 'bg-teal-50 dark:bg-teal-950 border-teal-200 dark:border-teal-800'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                            onClick={() => setSelectedPharmacy(pharmacy)}
+                          >
+                            <div className="flex-shrink-0 mt-1">
+                              <div className={`w-4 h-4 rounded-full border-2 ${
+                                selectedPharmacy?.id === pharmacy.id
+                                  ? 'border-dark-500 bg-teal-500'
+                                  : 'border-slate-300 dark:border-slate-600'
+                              }`}>
+                                {selectedPharmacy?.id === pharmacy.id && (
+                                  <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-slate-900 dark:text-white">
+                                  {pharmacy.name}
+                                </h4>
+                                {pharmacy.is_on_duty && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    On Duty
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-slate-600 dark:text-slate-300">
+                                <MapPin className="w-3 h-3 inline mr-1" />
+                                {pharmacy.address}, {pharmacy.city}
+                              </p>
+                              {pharmacy.phone && (
+                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                  📞 {pharmacy.phone}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                        {pharmacySearch ? 'No pharmacies found matching your search' : 'No pharmacies available'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {selectedPharmacy && (
+                <div className="bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800 rounded-lg p-4">
+                  <p className="font-medium text-teal-800 dark:text-teal-200 mb-2">
+                    Selected Pharmacy:
+                  </p>
+                  <p className="text-sm text-teal-700 dark:text-teal-300">
+                    <strong>{selectedPharmacy.name}</strong> will be assigned to <strong>{selectedUser?.name}</strong> as their managed pharmacy.
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={closePharmacyModal} disabled={assigningPharmacy}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={assignPharmacyToUser} 
+                disabled={!selectedPharmacy || assigningPharmacy}
+                className="bg-teal-600 hover:bg-teal-700"
+              >
+                {assigningPharmacy ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Assigning...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Assign Pharmacy
                   </>
                 )}
               </Button>

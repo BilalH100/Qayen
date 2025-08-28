@@ -109,3 +109,7 @@ type LoginResponse struct {
 type UpdateUserRoleRequest struct {
 	Role string `json:"role" validate:"required,oneof=regular pharmacist admin"`
 }
+
+type UpdateUsermanagedPharmacyRequest struct {
+	PharmacyId string `json:"pharmacy_id" validate:"required"`
+}

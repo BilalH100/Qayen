@@ -39,8 +39,8 @@ export default function PharmaciesPage() {
       try {
         setLoading(true);
         const response = await axios.get(`${BASE_URL}/pharmacies`);
-        setPharmacies(response.data);
-        setFilteredPharmacies(response.data);
+        setPharmacies(response.data.pharmacies);
+        setFilteredPharmacies(response.data.pharmacies);
       } catch (err) {
         console.error("Error fetching pharmacies:", err);
         setError("Failed to load pharmacies");

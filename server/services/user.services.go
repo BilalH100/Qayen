@@ -14,6 +14,7 @@ type UserService interface {
 	List(ctx context.Context, options schemas.Options) ([]models.User, error)
 	DeleteUser(ctx context.Context, id int32) error
 	UpdateUserRole(ctx context.Context, id int32, role models.Role) (*models.User, error)
+	UpdateUserPharmacy(ctx context.Context, userID int32, pharmacyId int32) (*models.User, error)
 }
 
 type userService struct {
@@ -46,4 +47,8 @@ func (s *userService) DeleteUser(ctx context.Context, id int32) error {
 
 func (s *userService) UpdateUserRole(ctx context.Context, id int32, role models.Role) (*models.User, error) {
 	return s.userRepo.UpdateRole(ctx, id, role)
+}
+
+func (s *userService) UpdateUserPharmacy(ctx context.Context, userID int32, pharmacyId int32) (*models.User, error) {
+	return s.userRepo.UpdateManagedPharmacy(ctx, userID, pharmacyId)
 }

@@ -61,7 +61,7 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req schemas.LoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			httpx.RespondWithError(w, fmt.Errorf("Invalid request body :%w", err))
+			httpx.RespondWithError(w, fmt.Errorf("invalid request body :%w", err))
 			return
 		}
 		user, err := s.GetUserProfileByEmail(r.Context(), req.Email)
@@ -76,7 +76,7 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 			}
 			token, err := utils.GenerateJWT(*user)
 			if err != nil {
-				httpx.RespondWithError(w, fmt.Errorf("Error creating jwt: %w", err))
+				httpx.RespondWithError(w, fmt.Errorf("error creating jwt: %w", err))
 				return
 			}
 			httpx.RespondWithJSON(w, http.StatusOK, schemas.LoginResponse{
@@ -105,13 +105,13 @@ func GetUserProfileHandler(s services.UserService) http.HandlerFunc {
 		idStr := r.URL.Query().Get("id")
 		id, err := strconv.ParseInt(idStr, 10, 32)
 		if err != nil {
-			httpx.RespondWithError(w, fmt.Errorf("Error parsing int:%w", err))
+			httpx.RespondWithError(w, fmt.Errorf("error parsing int:%w", err))
 			return
 		}
 		id32 := int32(id)
 		user, err := s.GetUserProfile(r.Context(), id32)
 		if err != nil {
-			httpx.RespondWithError(w, fmt.Errorf("Error getting user profile: %w", err))
+			httpx.RespondWithError(w, fmt.Errorf("error getting user profile: %w", err))
 			return
 		}
 		httpx.RespondWithJSON(w, http.StatusOK, schemas.GetUserResponse{
@@ -142,7 +142,7 @@ func ListAllUsersHandler(s services.UserService) http.HandlerFunc {
 			Offset: int32(offset),
 		})
 		if err != nil {
-			httpx.RespondWithError(w, fmt.Errorf("Error getting user list"))
+			httpx.RespondWithError(w, fmt.Errorf("error getting user list"))
 			return
 		}
 		users := make(map[string][]models.User)
@@ -177,7 +177,7 @@ func UpdateUserRole(s services.UserService) http.HandlerFunc {
 		idstr := chi.URLParam(r, "id")
 		var req schemas.UpdateUserRoleRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			httpx.RespondWithError(w, fmt.Errorf("Invalid request body :%w", err))
+			httpx.RespondWithError(w, fmt.Errorf("invalid request body :%w", err))
 			return
 		}
 		id, err := strconv.Atoi(idstr)
@@ -188,6 +188,37 @@ func UpdateUserRole(s services.UserService) http.HandlerFunc {
 		user, err := s.UpdateUserRole(r.Context(), int32(id), models.Role(req.Role))
 		if err != nil {
 			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
+			return
+		}
+		httpx.RespondWithJSON(w, http.StatusOK, *user)
+	}
+}
+
+func UpdateUserManagedPharmacyHandler(s services.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userIdStr := chi.URLParam(r, "userId")
+		if userIdStr == "" {
+			httpx.RespondWithError(w, fmt.Errorf("user id cannot be empty"))
+			return
+		}
+		var req schemas.UpdateUsermanagedPharmacyRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("error decoding request: %w", err))
+			return
+		}
+		userID, err := strconv.Atoi(userIdStr)
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("cannot convert user id"))
+			return
+		}
+		pharmacyID, err := strconv.Atoi(req.PharmacyId)
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("cannot convert user id"))
+			return
+		}
+		user, err := s.UpdateUserPharmacy(r.Context(), int32(userID), int32(pharmacyID))
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("error updating user pharmacy %w", err))
 			return
 		}
 		httpx.RespondWithJSON(w, http.StatusOK, *user)

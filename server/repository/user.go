@@ -5,6 +5,7 @@ import (
 	sqlc "kayena/server/database/generated"
 	"kayena/server/models"
 	"kayena/server/schemas"
+	"kayena/server/utils"
 )
 
 type UserRepository interface {
@@ -14,6 +15,7 @@ type UserRepository interface {
 	List(ctx context.Context, options schemas.Options) ([]models.User, error)
 	Delete(ctx context.Context, id int32) error
 	UpdateRole(ctx context.Context, id int32, role models.Role) (*models.User, error)
+	UpdateManagedPharmacy(ctx context.Context, userID int32, pharmacyID int32) (*models.User, error)
 }
 
 type sqlcUserRepo struct {
@@ -111,5 +113,23 @@ func (r *sqlcUserRepo) UpdateRole(ctx context.Context, id int32, role models.Rol
 		Role:  models.Role(res.UserRole),
 		Email: res.Email,
 		Name:  res.Name,
+	}, nil
+}
+
+func (r *sqlcUserRepo) UpdateManagedPharmacy(ctx context.Context, userID int32, pharmacyID int32) (*models.User, error) {
+	res, err := r.queries.UpdateUserManagedPharmacy(ctx, sqlc.UpdateUserManagedPharmacyParams{
+		ID:                userID,
+		ManagedPharmacyID: utils.Int32ToPgInt4(pharmacyID),
+	})
+	if err != nil {
+		return nil, wrap(err, "")
+	}
+	return &models.User{
+		ID:                res.ID,
+		Name:              res.Name,
+		Email:             res.Email,
+		Phone:             res.Phone,
+		Role:              models.Role(res.UserRole),
+		ManagedPharmacyID: res.ManagedPharmacyID.Int32,
 	}, nil
 }
