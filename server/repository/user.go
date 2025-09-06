@@ -50,12 +50,13 @@ func (r *sqlcUserRepo) GetByEmail(ctx context.Context, email string) (*models.Us
 	}
 
 	return &models.User{
-		ID:       user.ID,
-		Name:     user.Name,
-		Email:    user.Email,
-		Phone:    user.Phone,
-		Password: user.Password,
-		Role:     models.Role(user.UserRole),
+		ID:                user.ID,
+		Name:              user.Name,
+		Email:             user.Email,
+		Phone:             user.Phone,
+		Password:          user.Password,
+		Role:              models.Role(user.UserRole),
+		ManagedPharmacyID: user.ManagedPharmacyID.Int32,
 	}, nil
 }
 func (r *sqlcUserRepo) Create(ctx context.Context, user *models.User) error {

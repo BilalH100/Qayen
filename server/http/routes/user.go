@@ -16,6 +16,6 @@ func UserRouter(s services.UserService) http.Handler {
 	r.Post("/login", handlers.LoginHandler(s))
 	r.Delete("/id/{id}", handlers.DeleteUserHandler(s))
 	r.Put("/id/{id}/role", handlers.UpdateUserRole(s))
-	r.Put("/id/{id}/asssign-pharmacy/", handlers.UpdateUserManagedPharmacyHandler(s))
+	r.Put("/id/{id}/assign-pharmacy", handlers.UpdateUserManagedPharmacyHandler(s))
 	return r
 }

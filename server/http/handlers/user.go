@@ -40,6 +40,7 @@ func CreateUserHandler(s services.UserService) http.HandlerFunc {
 			httpx.RespondWithError(w, fmt.Errorf("failed to hash password: %w", err))
 			return
 		}
+
 		user := models.User{
 			Name:     req.Name,
 			Email:    req.Email,
@@ -79,14 +80,16 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 				httpx.RespondWithError(w, fmt.Errorf("error creating jwt: %w", err))
 				return
 			}
+			managedStr := strconv.Itoa(int(user.ManagedPharmacyID))
 			httpx.RespondWithJSON(w, http.StatusOK, schemas.LoginResponse{
 				Token: token,
 				User: schemas.GetUserResponse{
-					Phone: user.Phone,
-					Name:  user.Name,
-					Email: user.Email,
-					Id:    user.ID,
-					Role:  user.Role,
+					Phone:             user.Phone,
+					Name:              user.Name,
+					Email:             user.Email,
+					Id:                user.ID,
+					Role:              user.Role,
+					ManagedPharmacyId: managedStr,
 				},
 			})
 		} else if errors.Is(err, pgx.ErrNoRows) {
@@ -196,7 +199,7 @@ func UpdateUserRole(s services.UserService) http.HandlerFunc {
 
 func UpdateUserManagedPharmacyHandler(s services.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userIdStr := chi.URLParam(r, "userId")
+		userIdStr := chi.URLParam(r, "id")
 		if userIdStr == "" {
 			httpx.RespondWithError(w, fmt.Errorf("user id cannot be empty"))
 			return
@@ -206,17 +209,18 @@ func UpdateUserManagedPharmacyHandler(s services.UserService) http.HandlerFunc {
 			httpx.RespondWithError(w, fmt.Errorf("error decoding request: %w", err))
 			return
 		}
+		fmt.Println("id string", userIdStr)
 		userID, err := strconv.Atoi(userIdStr)
 		if err != nil {
-			httpx.RespondWithError(w, fmt.Errorf("cannot convert user id"))
+			httpx.RespondWithError(w, fmt.Errorf("cannot convert user id %w", err))
 			return
 		}
-		pharmacyID, err := strconv.Atoi(req.PharmacyId)
-		if err != nil {
-			httpx.RespondWithError(w, fmt.Errorf("cannot convert user id"))
-			return
-		}
-		user, err := s.UpdateUserPharmacy(r.Context(), int32(userID), int32(pharmacyID))
+		// pharmacyID, err := strconv.Atoi(req.PharmacyId)
+		// if err != nil {
+		// 	httpx.RespondWithError(w, fmt.Errorf("cannot convert pharmacy id %w", err))
+		// 	return
+		// }
+		user, err := s.UpdateUserPharmacy(r.Context(), int32(userID), int32(req.PharmacyId))
 		if err != nil {
 			httpx.RespondWithError(w, fmt.Errorf("error updating user pharmacy %w", err))
 			return

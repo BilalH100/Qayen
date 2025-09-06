@@ -20,6 +20,7 @@ type MedicationJson struct {
 	Tva              string `json:"tva"`
 	Pfht             string `json:"pfht"`
 }
+
 type Pharmacy struct {
 	Name      string `json:"name"`
 	City      string `json:"city"`
@@ -89,11 +90,12 @@ type Message struct {
 }
 
 type GetUserResponse struct {
-	Id    int32       `json:"id"`
-	Email string      `json:"email"`
-	Name  string      `json:"name"`
-	Phone string      `json:"phone"`
-	Role  models.Role `json:"role"`
+	Id                int32       `json:"id"`
+	Email             string      `json:"email"`
+	Name              string      `json:"name"`
+	Phone             string      `json:"phone"`
+	Role              models.Role `json:"role"`
+	ManagedPharmacyId string      `json:"managed_pharmacy_id"`
 }
 
 type Options struct {
@@ -111,5 +113,5 @@ type UpdateUserRoleRequest struct {
 }
 
 type UpdateUsermanagedPharmacyRequest struct {
-	PharmacyId string `json:"pharmacy_id" validate:"required"`
+	PharmacyId int `json:"pharmacy_id" validate:"required"`
 }

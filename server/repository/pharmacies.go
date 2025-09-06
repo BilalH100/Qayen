@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	sqlc "kayena/server/database/generated"
+	"kayena/server/models"
 	"kayena/server/schemas"
 	"kayena/server/utils"
 	"strconv"
@@ -13,7 +14,7 @@ type PharmacyRepository interface {
 	GetById(ctx context.Context, id int32) (*schemas.Pharmacy, error)
 	Create(ctx context.Context, p *schemas.Pharmacy) error
 	GetClosest(ctx context.Context, c schemas.Coordinates, medId int32) (*int32, *schemas.Pharmacy, error)
-	GetAll(ctx context.Context) ([]schemas.Pharmacy, error)
+	GetAll(ctx context.Context) ([]models.Pharmacy, error)
 }
 
 type sqlcPharmacyRepo struct {
@@ -95,15 +96,16 @@ func (s *sqlcPharmacyRepo) GetClosest(ctx context.Context, c schemas.Coordinates
 	return &distance, pharmacy, nil
 }
 
-func (s *sqlcPharmacyRepo) GetAll(ctx context.Context) ([]schemas.Pharmacy, error) {
+func (s *sqlcPharmacyRepo) GetAll(ctx context.Context) ([]models.Pharmacy, error) {
 	res, err := s.queries.ListPharmacies(ctx)
 	if err != nil {
 		return nil, wrap(err, "")
 	}
 
-	pharmacies := make([]schemas.Pharmacy, len(res))
+	pharmacies := make([]models.Pharmacy, len(res))
 	for i, pharmacy := range res {
-		pharmacies[i] = schemas.Pharmacy{
+		pharmacies[i] = models.Pharmacy{
+			ID:        pharmacy.ID,
 			Name:      pharmacy.Name,
 			City:      pharmacy.City,
 			Latitude:  utils.Float8ToString(pharmacy.Latitude),

@@ -12,5 +12,6 @@ func PharmacyRouter(s services.PharmacyService) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", handlers.GetAllPharmaciesHandler(s))
 	r.Get("/closest", handlers.GetClosestPharmacyHandler(s))
+	r.Get("/id/{id}", handlers.GetPharmacyDetailsHandler(s))
 	return r
 }

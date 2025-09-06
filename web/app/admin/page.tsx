@@ -167,15 +167,10 @@ function AdminDashboardContent() {
   const updateUserRole = async () => {
     if (!selectedUser) return;
     
-    // If changing to pharmacist, open pharmacy assignment modal
-    if (selectedRole === "pharmacist" && selectedUser.role !== "pharmacist") {
-      closeModal();
-      setIsPharmacyModalOpen(true);
-      fetchPharmacies();
-      return;
-    }
+    console.log('updateUserRole called with:', { selectedUser, selectedRole });
 
-    // For other role changes, proceed normally
+    // Proceed with normal role update for all roles
+    console.log('Proceeding with role update');
     setUpdating(true);
     try {
       const res = await fetch(`${BASE_URL}/users/id/${selectedUser.id}/role`, {
@@ -185,6 +180,8 @@ function AdminDashboardContent() {
         },
         body: JSON.stringify({ role: selectedRole }),
       });
+
+      console.log('Role update response:', { status: res.status, ok: res.ok });
 
       if (res.ok) {
         setUsers(prevUsers => 
@@ -210,6 +207,11 @@ function AdminDashboardContent() {
       }
     } catch (error) {
       console.error('Error updating user role:', error);
+      toast({
+        title: "Role update failed",
+        description: "Network error occurred",
+        variant: "destructive",
+      });
     } finally {
       setUpdating(false);
     }
@@ -238,26 +240,22 @@ function AdminDashboardContent() {
     setSelectedRole("regular");
   };
 
-  const assignPharmacyToUser = async () => {
+  const openPharmacyAssignmentModal = (user: User) => {
+    setSelectedUser(user);
+    setIsPharmacyModalOpen(true);
+    fetchPharmacies();
+  };
+
+    const assignPharmacyToUser = async () => {
     if (!selectedUser || !selectedPharmacy) return;
+
+    console.log('assignPharmacyToUser called with:', { selectedUser, selectedPharmacy });
 
     setAssigningPharmacy(true);
     try {
-      // First update the user role to pharmacist
-      const roleRes = await fetch(`${BASE_URL}/users/${selectedUser.id}/role`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ role: "pharmacist" }),
-      });
-
-      if (!roleRes.ok) {
-        throw new Error('Failed to update user role');
-      }
-
-      // Then assign the pharmacy
-      const pharmacyRes = await fetch(`${BASE_URL}/users/${selectedUser.id}/assign-pharmacy`, {
+      // Assign the pharmacy to the user
+      console.log('Assigning pharmacy...', selectedPharmacy.id);
+      const pharmacyRes = await fetch(`${BASE_URL}/users/id/${selectedUser.id}/assign-pharmacy`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -265,25 +263,20 @@ function AdminDashboardContent() {
         body: JSON.stringify({ pharmacy_id: selectedPharmacy.id }),
       });
 
+      console.log('Pharmacy assignment response:', { status: pharmacyRes.status, ok: pharmacyRes.ok });
+
       if (pharmacyRes.ok) {
-        setUsers(prevUsers => 
-          prevUsers.map(user => 
-            user.id === selectedUser.id 
-              ? { ...user, role: "pharmacist" }
-              : user
-          )
-        );
         closePharmacyModal();
-        fetchUsers();
+        fetchUsers(); // Refresh the user list
         toast({
-          title: "Pharmacist assigned successfully",
+          title: "Pharmacy assigned successfully",
           description: `${selectedUser.name} has been assigned to ${selectedPharmacy.name}`,
         });
       } else {
         console.error('Failed to assign pharmacy');
         toast({
           title: "Pharmacy assignment failed",
-          description: "Role was updated but pharmacy assignment failed",
+          description: "Please try again",
           variant: "destructive",
         });
       }
@@ -443,6 +436,18 @@ function AdminDashboardContent() {
                                   </Button>
                                 </DialogTrigger>
                               </Dialog>
+                              
+                              {user.role === "pharmacist" && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="text-teal-600 border-teal-200 hover:bg-teal-50 hover:border-teal-300 dark:text-teal-400 dark:border-teal-800 dark:hover:bg-teal-950"
+                                  onClick={() => openPharmacyAssignmentModal(user)}
+                                >
+                                  <MapPin className="h-4 w-4 mr-1" />
+                                  Assign Pharmacy
+                                </Button>
+                              )}
                               
                               <Dialog open={isDeleteModalOpen && userToDelete?.id === user.id} onOpenChange={(open) => {
                                 if (!open) closeDeleteModal();

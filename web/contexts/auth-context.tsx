@@ -11,6 +11,7 @@ interface User {
   name: string;
   phone: string;
   role: string;
+  managed_pharmacy_id?: string;
 }
 
 interface AuthContextType {

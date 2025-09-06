@@ -18,7 +18,6 @@ export function Navbar() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
   const { user, isAuthenticated, isLoading } = useAuth();
-  console.log(user);
 
   const handleAuthClick = (mode: "login" | "register") => {
     setAuthMode(mode);

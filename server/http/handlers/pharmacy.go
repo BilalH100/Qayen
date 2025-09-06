@@ -3,10 +3,13 @@ package handlers
 import (
 	"fmt"
 	httpx "kayena/server/http"
+	"kayena/server/models"
 	"kayena/server/schemas"
 	"kayena/server/services"
 	"net/http"
 	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type GetClosestResponse struct {
@@ -22,7 +25,7 @@ func GetAllPharmaciesHandler(s services.PharmacyService) http.HandlerFunc {
 			httpx.RespondWithError(w, httpx.ErrInternal)
 			return
 		}
-		pharmacies := make(map[string][]schemas.Pharmacy)
+		pharmacies := make(map[string][]models.Pharmacy)
 		pharmacies["pharmacies"] = res
 		httpx.RespondWithJSON(w, http.StatusOK, pharmacies)
 	}
@@ -71,5 +74,28 @@ func GetClosestPharmacyHandler(s services.PharmacyService) http.HandlerFunc {
 			Distance: *distance,
 			Pharmacy: *pharmacy,
 		})
+	}
+}
+
+func GetPharmacyDetailsHandler(s services.PharmacyService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := chi.URLParam(r, "id")
+		if idStr == "" {
+			httpx.RespondWithError(w, fmt.Errorf("id cannot be empty"))
+			return
+		}
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("error parsing id string"))
+			return
+		}
+		res, err := s.GetByIdService(r.Context(), int32(id))
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
+			return
+		}
+		pharmacy := make(map[string]schemas.Pharmacy)
+		pharmacy["pharmacy"] = *res
+		httpx.RespondWithJSON(w, http.StatusOK, pharmacy)
 	}
 }

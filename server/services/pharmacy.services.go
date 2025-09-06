@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"kayena/server/models"
 	"kayena/server/repository"
 	"kayena/server/schemas"
 )
@@ -10,7 +11,7 @@ type PharmacyService interface {
 	GetByIdService(ctx context.Context, id int32) (*schemas.Pharmacy, error)
 	CreateService(ctx context.Context, p *schemas.Pharmacy) error
 	GetClosestService(ctx context.Context, c schemas.Coordinates, medId int32) (*int32, *schemas.Pharmacy, error)
-	GetAllService(ctx context.Context) ([]schemas.Pharmacy, error)
+	GetAllService(ctx context.Context) ([]models.Pharmacy, error)
 }
 
 type pharmacyService struct {
@@ -31,7 +32,7 @@ func (s *pharmacyService) CreateService(ctx context.Context, p *schemas.Pharmacy
 	return s.pharmaryRepo.Create(ctx, p)
 }
 
-func (s *pharmacyService) GetAllService(ctx context.Context) ([]schemas.Pharmacy, error) {
+func (s *pharmacyService) GetAllService(ctx context.Context) ([]models.Pharmacy, error) {
 	return s.pharmaryRepo.GetAll(ctx)
 }
 
