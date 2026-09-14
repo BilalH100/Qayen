@@ -1,0 +1,84 @@
+package models
+
+import (
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type Medication struct {
+	ID               int32            `json:"id"`
+	Status           string           `json:"status"`
+	CommercialStatus string           `json:"commercial_status"`
+	Speciality       string           `json:"speciality"`
+	Dosage           string           `json:"dosage"`
+	Form             string           `json:"form"`
+	Presentation     string           `json:"presentation"`
+	Pp               string           `json:"pp"`
+	ActiveSubstance  string           `json:"active_substance"`
+	TherapeuticClass string           `json:"therapeutic_class"`
+	Epi              string           `json:"epi"`
+	Ppv              string           `json:"ppv"`
+	Ph               string           `json:"ph"`
+	Pfht             string           `json:"pfht"`
+	Code             string           `json:"code"`
+	Tva              string           `json:"tva"`
+	CreatedAt        pgtype.Timestamp `json:"created_at"`
+	Description      string           `json:"description"`
+	CommonSd         []string         `json:"common_sd"`
+	SeriousSd        []string         `json:"serious_sd"`
+	GeneralInfo      []string         `json:"general_info"`
+}
+
+type Pharmacy struct {
+	ID        int32            `json:"id"`
+	Name      string           `json:"name"`
+	Address   string           `json:"address"`
+	Latitude  string           `json:"latitude"`
+	Longitude string           `json:"longitude"`
+	City      string           `json:"city"`
+	Phone     string           `json:"phone"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+}
+
+// StockItem represents one medication a pharmacy has on hand, and how much.
+type StockItem struct {
+	ID           int32     `json:"id"`
+	PharmacyID   int32     `json:"pharmacy_id"`
+	MedicationID int32     `json:"medication_id"`
+	Speciality   string    `json:"speciality,omitempty"`
+	Quantity     int32     `json:"quantity"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type Stock struct {
+	ID           int32            `json:"id"`
+	PharmacyID   pgtype.Int4      `json:"pharmacy_id"`
+	MedicationID pgtype.Int4      `json:"medication_id"`
+	Quantity     int32            `json:"quantity"`
+	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
+}
+
+type Role string
+
+const (
+	Regular    Role = "regular"
+	Pharmacist Role = "pharmacist"
+	Admin      Role = "admin"
+)
+
+type User struct {
+	ID                int32            `json:"id"`
+	Password          string           `json:"password"`
+	Email             string           `json:"email"`
+	Name              string           `json:"name"`
+	Phone             string           `json:"phone"`
+	Role              Role             `json:"role"`
+	ManagedPharmacyID int32            `json:"managed_pharmacy"`
+	CreatedAt         pgtype.Timestamp `json:"created_at"`
+}
+
+type Category struct {
+	ID   int32  `json:"id"`
+	Name string `json:"name"`
+}
