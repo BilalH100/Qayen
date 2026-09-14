@@ -1,3 +1,5 @@
+"use client";
+
 import { ArrowLeft, Star, Check, MapPin, Phone, Globe, Clock } from "lucide-react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -5,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar } from "@/components/ui/avatar"
+import { use } from "react"
 
 const getServiceDescription = (service: string): string => {
   const descriptions: Record<string, string> = {
@@ -50,8 +53,9 @@ interface PharmacyPageProps {
 }
 
 export default function PharmacyPage({ params }: PharmacyPageProps) {
+  const { slug } = use(params);
   const pharmacy = {
-    name: params.slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+    name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
     address: "123 Health Street, New York, NY 10001",
     phone: "(123) 456-7890",
     website: "https://www.example.com",

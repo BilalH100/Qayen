@@ -48,6 +48,7 @@ export default function MedicationsPage() {
   const [filteredMeds, setFilteredMeds] = React.useState<Medication[] | null>([]);
   const [sortBy, setSortBy] = React.useState("relevance");
   const [selectedCategory, setSelectedCategory] = React.useState("all");
+  const [categories, setCategories] = React.useState<string[]>([]);
   const itemsPerPage = 20;
 
   const fetchMedications = async (page: number = 1) => {
@@ -241,7 +242,19 @@ export default function MedicationsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     fetchMedications(1);
     fetchAllMedications();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/meds/categories/all`);
+      if (Array.isArray(response.data)) {
+        setCategories(response.data.map((c: { id: number; name: string }) => c.name));
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    }
+  };
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages && page !== currentPage) {
@@ -294,17 +307,16 @@ export default function MedicationsPage() {
         </div>
         <div className="flex gap-2">
           <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="pain relief">Pain Relief</SelectItem>
-              <SelectItem value="antibiotics">Antibiotics</SelectItem>
-              <SelectItem value="vitamins">Vitamins</SelectItem>
-              <SelectItem value="diabetes">Diabetes</SelectItem>
-              <SelectItem value="cardiovascular">Cardiovascular</SelectItem>
-              <SelectItem value="dermatology">Dermatology</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={sortBy} onValueChange={handleSortChange}>

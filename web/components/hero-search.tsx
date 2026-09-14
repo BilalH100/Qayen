@@ -150,7 +150,7 @@ export function HeroSearch() {
   };
 
   const createMedicationAlert = async () => {
-    if (!selectedMedication || !isAuthenticated) return;
+    if (!selectedMedication || !isAuthenticated || !user) return;
 
     setCreatingAlert(true);
     try {
@@ -158,18 +158,20 @@ export function HeroSearch() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify({
-          medication_name: selectedMedication.speciality,
-          user_latitude: parseFloat(userCoordinates.latitude),
-          user_longitude: parseFloat(userCoordinates.longitude),
-          urgency_level: "medium",
+          customer_id: user.id,
+          medication_id: selectedMedication.id,
+          latitude: parseFloat(userCoordinates.latitude),
+          longitude: parseFloat(userCoordinates.longitude),
+          search_radius_km: 50,
+          max_response_time_minutes: 2,
         }),
       });
 
       if (response.ok) {
-        const alertData = await response.json();
+        const responseData = await response.json();
+        const alertData = responseData.data;
         setAlertResult({
           alert_id: alertData.alert_id,
           status: "waiting",
@@ -226,22 +228,25 @@ export function HeroSearch() {
   const pollForResponses = async (alertId: number) => {
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`${BASE_URL}/alerts/${alertId}/responses`, {
-          headers: {
-            "Authorization": `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
+        const response = await fetch(
+          `${BASE_URL}/alerts/${alertId}/results?lat=${userCoordinates.latitude}&lng=${userCoordinates.longitude}`,
+        );
 
         if (response.ok) {
           const data = await response.json();
-          setAlertResult(prev => prev ? {
-            ...prev,
-            status: data.status || prev.status,
-            pharmacies: data.responses || [],
-          } : null);
+          const result = data.data;
+          setAlertResult((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: result?.status || prev.status,
+                  pharmacies: result?.pharmacies || [],
+                }
+              : null,
+          );
 
           // Stop polling if we have responses or time is up
-          if (data.responses?.length > 0 || timeRemaining <= 0) {
+          if (result?.pharmacies?.length > 0 || timeRemaining <= 0) {
             clearInterval(pollInterval);
             setWaitingForResponses(false);
           }

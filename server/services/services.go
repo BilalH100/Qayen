@@ -12,12 +12,14 @@ type Services struct {
 	UserService     UserService
 	PharmacyService PharmacyService
 	AlertService    *AlertService
+	SSEHub          *SSEHub
 }
 
 func NewService(db sqlc.DBTX) *Services {
+	hub := NewSSEHub()
 	var alertService *AlertService
 	if pool, ok := db.(*pgxpool.Pool); ok {
-		alertService = NewAlertService(pool)
+		alertService = NewAlertService(pool, hub)
 	}
 
 	return &Services{
@@ -25,5 +27,6 @@ func NewService(db sqlc.DBTX) *Services {
 		UserService:     NewUserService(repository.NewUserRepo(db)),
 		PharmacyService: NewPharmacyService(repository.NewPharmacyRepo(db)),
 		AlertService:    alertService,
+		SSEHub:          hub,
 	}
 }

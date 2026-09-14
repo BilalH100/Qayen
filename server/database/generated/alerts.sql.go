@@ -54,8 +54,9 @@ const checkPharmacyIsOpen = `-- name: CheckPharmacyIsOpen :one
 SELECT 
   CASE 
     WHEN p.is_24h = true THEN true
+    WHEN p.is_24h IS NULL AND p.opening_time IS NULL AND p.closing_time IS NULL AND (p.closed_days IS NULL OR array_length(p.closed_days, 1) IS NULL) THEN true
     WHEN EXTRACT(DOW FROM now()) = ANY(p.closed_days) THEN false
-    WHEN EXTRACT(HOUR FROM now())::TIME BETWEEN p.opening_time AND p.closing_time THEN true
+    WHEN p.opening_time IS NOT NULL AND p.closing_time IS NOT NULL AND now()::time BETWEEN p.opening_time AND p.closing_time THEN true
     ELSE false
   END as is_open
 FROM pharmacies p 
@@ -357,7 +358,7 @@ type GetNearbyPharmaciesForAlertRow struct {
 	ClosingTime pgtype.Time
 	Is24h       pgtype.Bool
 	ClosedDays  []int32
-	DistanceKm  int32
+	DistanceKm  float64
 }
 
 func (q *Queries) GetNearbyPharmaciesForAlert(ctx context.Context, arg GetNearbyPharmaciesForAlertParams) ([]GetNearbyPharmaciesForAlertRow, error) {
@@ -382,6 +383,96 @@ func (q *Queries) GetNearbyPharmaciesForAlert(ctx context.Context, arg GetNearby
 			&i.ClosingTime,
 			&i.Is24h,
 			&i.ClosedDays,
+			&i.DistanceKm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNearbyPharmaciesWithStockForAlert = `-- name: GetNearbyPharmaciesWithStockForAlert :many
+SELECT 
+  p.id, p.name, p.address, p.latitude, p.longitude, p.city, p.phone, p.created_at,
+  p.opening_time, p.closing_time, p.is_24h, p.closed_days,
+  s.quantity AS stock_quantity,
+  (
+    6371 * acos(
+      cos(radians($1)) *
+      cos(radians(p.latitude)) *
+      cos(radians(p.longitude) - radians($2)) +
+      sin(radians($1)) *
+      sin(radians(p.latitude))
+    )
+  ) AS distance_km
+FROM pharmacies p
+JOIN stock s ON s.pharmacy_id = p.id AND s.medication_id = $4 AND s.quantity > 0
+WHERE 
+  p.latitude IS NOT NULL 
+  AND p.longitude IS NOT NULL
+  AND (
+    6371 * acos(
+      cos(radians($1)) *
+      cos(radians(p.latitude)) *
+      cos(radians(p.longitude) - radians($2)) +
+      sin(radians($1)) *
+      sin(radians(p.latitude))
+    )
+  ) <= $3
+ORDER BY distance_km ASC
+`
+
+type GetNearbyPharmaciesWithStockForAlertParams struct {
+	Radians      float64
+	Radians_2    float64
+	Latitude     pgtype.Float8
+	MedicationID pgtype.Int4
+}
+
+type GetNearbyPharmaciesWithStockForAlertRow struct {
+	ID            int32
+	Name          string
+	Address       string
+	Latitude      pgtype.Float8
+	Longitude     pgtype.Float8
+	City          string
+	Phone         string
+	CreatedAt     pgtype.Timestamp
+	OpeningTime   pgtype.Time
+	ClosingTime   pgtype.Time
+	Is24h         pgtype.Bool
+	ClosedDays    []int32
+	StockQuantity int32
+	DistanceKm    float64
+}
+
+func (q *Queries) GetNearbyPharmaciesWithStockForAlert(ctx context.Context, arg GetNearbyPharmaciesWithStockForAlertParams) ([]GetNearbyPharmaciesWithStockForAlertRow, error) {
+	rows, err := q.db.Query(ctx, getNearbyPharmaciesWithStockForAlert, arg.Radians, arg.Radians_2, arg.Latitude, arg.MedicationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetNearbyPharmaciesWithStockForAlertRow
+	for rows.Next() {
+		var i GetNearbyPharmaciesWithStockForAlertRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Address,
+			&i.Latitude,
+			&i.Longitude,
+			&i.City,
+			&i.Phone,
+			&i.CreatedAt,
+			&i.OpeningTime,
+			&i.ClosingTime,
+			&i.Is24h,
+			&i.ClosedDays,
+			&i.StockQuantity,
 			&i.DistanceKm,
 		); err != nil {
 			return nil, err
@@ -444,7 +535,7 @@ type GetPharmacistResponsesForAlertRow struct {
 	PharmacyLatitude         pgtype.Float8
 	PharmacyLongitude        pgtype.Float8
 	SubstituteMedicationName string
-	DistanceKm               int32
+	DistanceKm               float64
 }
 
 func (q *Queries) GetPharmacistResponsesForAlert(ctx context.Context, arg GetPharmacistResponsesForAlertParams) ([]GetPharmacistResponsesForAlertRow, error) {
@@ -565,7 +656,7 @@ type GetPharmacyDashboardAlertsRow struct {
 	MedicationName     string
 	ActiveSubstance    string
 	CustomerName       string
-	CustomerDistanceKm int32
+	CustomerDistanceKm float64
 	AlreadyResponded   bool
 }
 

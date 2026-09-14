@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SearchIcon, MapPinIcon, ClockIcon, PhoneIcon, CheckIcon, AlertTriangleIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/auth-context";
+import { BASE_URL } from "@/utils/api";
 
 interface Medication {
   id: number;
@@ -44,14 +46,24 @@ export default function MedicationAlertSearch() {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationLabel, setLocationLabel] = useState<string>("");
+  const [addressInput, setAddressInput] = useState("");
+  const [geocoding, setGeocoding] = useState(false);
+  const [addressResults, setAddressResults] = useState<
+    { label: string; lat: number; lng: number }[]
+  >([]);
   const [searchRadius, setSearchRadius] = useState(10);
   const [alertResult, setAlertResult] = useState<AlertResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isWaiting, setIsWaiting] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  // Get user location
+  // Try to get the user's real browser location as a starting point.
+  // This is only a convenience default — since Kayena's seeded pharmacies
+  // are currently all in Rabat, use the address search below to test
+  // from anywhere else.
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -60,18 +72,52 @@ export default function MedicationAlertSearch() {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           });
+          setLocationLabel("Your current location");
         },
-        (error) => {
-          console.error("Error getting location:", error);
-          toast({
-            title: "Location Error",
-            description: "Please enable location services for better results",
-            variant: "destructive",
-          });
+        () => {
+          // Silently ignore — the address search below covers this case.
         }
       );
     }
-  }, [toast]);
+  }, []);
+
+  // Debounced address -> coordinates lookup (OpenStreetMap Nominatim, free, no API key)
+  useEffect(() => {
+    if (addressInput.trim().length < 3) {
+      setAddressResults([]);
+      return;
+    }
+    const timeoutId = setTimeout(async () => {
+      try {
+        setGeocoding(true);
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(
+            addressInput
+          )}`
+        );
+        const data = await response.json();
+        setAddressResults(
+          data.map((item: any) => ({
+            label: item.display_name,
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+          }))
+        );
+      } catch (error) {
+        console.error("Geocoding failed:", error);
+      } finally {
+        setGeocoding(false);
+      }
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [addressInput]);
+
+  const chooseAddress = (result: { label: string; lat: number; lng: number }) => {
+    setLocation({ lat: result.lat, lng: result.lng });
+    setLocationLabel(result.label);
+    setAddressInput("");
+    setAddressResults([]);
+  };
 
   // Search for medications
   const searchMedications = async (term: string) => {
@@ -81,11 +127,11 @@ export default function MedicationAlertSearch() {
     }
 
     try {
-      const response = await fetch(`/api/v1/meds/search?q=${encodeURIComponent(term)}`);
+      const response = await fetch(`${BASE_URL}/meds/search?q=${encodeURIComponent(term)}`);
       const data = await response.json();
       
-      if (data.success) {
-        setMedications(data.data.slice(0, 10)); // Limit to 10 results
+      if (Array.isArray(data)) {
+        setMedications(data.slice(0, 10)); // Limit to 10 results
       }
     } catch (error) {
       console.error("Failed to search medications:", error);
@@ -115,13 +161,13 @@ export default function MedicationAlertSearch() {
     setIsSearching(true);
     
     try {
-      const response = await fetch("/api/v1/alerts", {
+      const response = await fetch(`${BASE_URL}/alerts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          customer_id: 1, // TODO: Get from auth context
+          customer_id: user?.id,
           medication_id: selectedMedication.id,
           latitude: location.lat,
           longitude: location.lng,
@@ -190,7 +236,7 @@ export default function MedicationAlertSearch() {
 
     try {
       const response = await fetch(
-        `/api/v1/alerts/${alertId}/results?lat=${location.lat}&lng=${location.lng}`
+        `${BASE_URL}/alerts/${alertId}/results?lat=${location.lat}&lng=${location.lng}`
       );
       const data = await response.json();
       
@@ -274,6 +320,78 @@ export default function MedicationAlertSearch() {
                 </div>
               )}
 
+              {/* Location */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Search location</label>
+                <div className="relative">
+                  <MapPinIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Type a city or address (e.g. Rabat, Morocco)..."
+                    value={addressInput}
+                    onChange={(e) => setAddressInput(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                {geocoding && (
+                  <p className="text-xs text-muted-foreground">Searching...</p>
+                )}
+                {addressResults.length > 0 && (
+                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                    {addressResults.map((result, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => chooseAddress(result)}
+                        className="p-2 text-sm cursor-pointer hover:bg-muted"
+                      >
+                        {result.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span className="flex items-center">
+                    <MapPinIcon className="h-4 w-4 mr-1" />
+                    {location
+                      ? locationLabel || "Custom location set"
+                      : "No location set yet"}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            setLocation({
+                              lat: position.coords.latitude,
+                              lng: position.coords.longitude,
+                            });
+                            setLocationLabel("Your current location");
+                          },
+                          () => {
+                            toast({
+                              title: "Location Error",
+                              description:
+                                "Couldn't access your current location. Try typing an address above instead.",
+                              variant: "destructive",
+                            });
+                          }
+                        );
+                      }
+                    }}
+                  >
+                    Use my current location
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Tip: Kayena's pharmacies are currently all in Rabat — search
+                  "Rabat, Morocco" above to test regardless of where you
+                  actually are.
+                </p>
+              </div>
+
               {/* Search Settings */}
               <div className="flex items-center gap-4">
                 <div className="flex-1">
@@ -286,10 +404,6 @@ export default function MedicationAlertSearch() {
                     max="50"
                     className="mt-1"
                   />
-                </div>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <MapPinIcon className="h-4 w-4 mr-1" />
-                  {location ? "Location enabled" : "Location required"}
                 </div>
               </div>
 

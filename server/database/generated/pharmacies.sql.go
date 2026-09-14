@@ -101,7 +101,7 @@ type GetClosestPharmacyWithMedicationRow struct {
 	ClosingTime pgtype.Time
 	Is24h       pgtype.Bool
 	ClosedDays  []int32
-	DistanceKm  int32
+	DistanceKm  float64
 }
 
 func (q *Queries) GetClosestPharmacyWithMedication(ctx context.Context, arg GetClosestPharmacyWithMedicationParams) (GetClosestPharmacyWithMedicationRow, error) {

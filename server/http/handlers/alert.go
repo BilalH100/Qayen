@@ -14,11 +14,13 @@ import (
 
 type AlertHandler struct {
 	alertService *services.AlertService
+	sseHub       *services.SSEHub
 }
 
-func NewAlertHandler(alertService *services.AlertService) *AlertHandler {
+func NewAlertHandler(alertService *services.AlertService, sseHub *services.SSEHub) *AlertHandler {
 	return &AlertHandler{
 		alertService: alertService,
+		sseHub:       sseHub,
 	}
 }
 
@@ -193,20 +195,18 @@ func (h *AlertHandler) GetPharmacyDashboard(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// For now, we'll implement a simplified dashboard
-	// In a real implementation, this would call a specific service method
+	alerts, err := h.alertService.GetPharmacyDashboardAlerts(r.Context(), int32(pharmacyID))
+	if err != nil {
+		h.handleAlertError(w, err, "Failed to get pharmacy dashboard")
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"pharmacy_id":    pharmacyID,
-			"pending_alerts": []interface{}{}, // TODO: Implement GetPharmacyDashboardAlerts
-			"today_stats": map[string]interface{}{
-				"alerts_received":   0,
-				"responses_sent":    0,
-				"avg_response_time": 0,
-				"availability_rate": 0,
-			},
+			"pending_alerts": alerts,
 		},
 	})
 }
@@ -261,9 +261,16 @@ func (h *AlertHandler) GetPharmacyAnalytics(w http.ResponseWriter, r *http.Reque
 // SSE endpoint for real-time alerts to pharmacies
 func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request) {
 	pharmacyIDStr := chi.URLParam(r, "id")
-	_, err := strconv.ParseInt(pharmacyIDStr, 10, 32)
+	pharmacyID64, err := strconv.ParseInt(pharmacyIDStr, 10, 32)
 	if err != nil {
 		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid pharmacy ID")
+		return
+	}
+	pharmacyID := int32(pharmacyID64)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		utils.ErrorResponse(w, http.StatusInternalServerError, "Streaming unsupported")
 		return
 	}
 
@@ -272,12 +279,13 @@ func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
 
-	// Create a channel for this connection
+	// Create a channel for this connection and register it with the hub
 	clientChan := make(chan string, 10)
-
-	// TODO: Register this client for real-time notifications
-	// This would integrate with a WebSocket manager or pub/sub system
+	h.sseHub.RegisterPharmacy(pharmacyID, clientChan)
+	defer h.sseHub.UnregisterPharmacy(pharmacyID, clientChan)
 
 	// Keep connection alive and send heartbeat
 	ticker := time.NewTicker(30 * time.Second)
@@ -285,12 +293,16 @@ func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request)
 
 	for {
 		select {
-		case msg := <-clientChan:
+		case msg, ok := <-clientChan:
+			if !ok {
+				// Hub closed the channel (e.g. during unregister elsewhere)
+				return
+			}
 			w.Write([]byte("data: " + msg + "\n\n"))
-			w.(http.Flusher).Flush()
+			flusher.Flush()
 		case <-ticker.C:
 			w.Write([]byte("data: {\"type\":\"heartbeat\"}\n\n"))
-			w.(http.Flusher).Flush()
+			flusher.Flush()
 		case <-r.Context().Done():
 			// Client disconnected
 			return
@@ -301,9 +313,16 @@ func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request)
 // SSE endpoint for real-time updates to customers
 func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request) {
 	alertIDStr := chi.URLParam(r, "id")
-	_, err := strconv.ParseInt(alertIDStr, 10, 32)
+	alertID64, err := strconv.ParseInt(alertIDStr, 10, 32)
 	if err != nil {
 		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid alert ID")
+		return
+	}
+	alertID := int32(alertID64)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		utils.ErrorResponse(w, http.StatusInternalServerError, "Streaming unsupported")
 		return
 	}
 
@@ -312,11 +331,13 @@ func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
 
-	// Create a channel for this connection
+	// Create a channel for this connection and register it with the hub
 	clientChan := make(chan string, 10)
-
-	// TODO: Register this client for real-time notifications about this alert
+	h.sseHub.RegisterAlert(alertID, clientChan)
+	defer h.sseHub.UnregisterAlert(alertID, clientChan)
 
 	// Keep connection alive and send heartbeat
 	ticker := time.NewTicker(30 * time.Second)
@@ -324,12 +345,15 @@ func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request)
 
 	for {
 		select {
-		case msg := <-clientChan:
+		case msg, ok := <-clientChan:
+			if !ok {
+				return
+			}
 			w.Write([]byte("data: " + msg + "\n\n"))
-			w.(http.Flusher).Flush()
+			flusher.Flush()
 		case <-ticker.C:
 			w.Write([]byte("data: {\"type\":\"heartbeat\"}\n\n"))
-			w.(http.Flusher).Flush()
+			flusher.Flush()
 		case <-r.Context().Done():
 			// Client disconnected
 			return

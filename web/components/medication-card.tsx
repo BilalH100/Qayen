@@ -2,6 +2,7 @@ import { Check, X, Pill } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { isMedicationAvailable } from "@/utils/types";
 
 interface MedicationCardProps {
   id: number;
@@ -9,6 +10,8 @@ interface MedicationCardProps {
   category?: string;
   form?: string;
   presentation?: string;
+  // This should be the medication's *commercial* status (e.g. "Commercialisé",
+  // "Non Commercialisé"), not the AMM registration status ("AMM ENREGISTREE").
   status?: string;
   code?: string;
 }
@@ -24,9 +27,7 @@ export function MedicationCard({
 }: MedicationCardProps) {
   const slug = code || id.toString();
 
-  const isAvailable =
-    status?.toLowerCase() === "commercialisé" ||
-    status?.toLowerCase() === "active";
+  const isAvailable = isMedicationAvailable(status);
 
   return (
     <Link href={`/medications/${slug}`}>

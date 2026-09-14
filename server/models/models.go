@@ -1,6 +1,10 @@
 package models
 
-import "github.com/jackc/pgx/v5/pgtype"
+import (
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
 
 type Medication struct {
 	ID               int32            `json:"id"`
@@ -35,6 +39,16 @@ type Pharmacy struct {
 	City      string           `json:"city"`
 	Phone     string           `json:"phone"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
+}
+
+// StockItem represents one medication a pharmacy has on hand, and how much.
+type StockItem struct {
+	ID           int32     `json:"id"`
+	PharmacyID   int32     `json:"pharmacy_id"`
+	MedicationID int32     `json:"medication_id"`
+	Speciality   string    `json:"speciality,omitempty"`
+	Quantity     int32     `json:"quantity"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type Stock struct {

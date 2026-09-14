@@ -55,8 +55,9 @@ ORDER BY distance_km ASC;
 SELECT 
   CASE 
     WHEN p.is_24h = true THEN true
+    WHEN p.is_24h IS NULL AND p.opening_time IS NULL AND p.closing_time IS NULL AND (p.closed_days IS NULL OR array_length(p.closed_days, 1) IS NULL) THEN true
     WHEN EXTRACT(DOW FROM now()) = ANY(p.closed_days) THEN false
-    WHEN EXTRACT(HOUR FROM now())::TIME BETWEEN p.opening_time AND p.closing_time THEN true
+    WHEN p.opening_time IS NOT NULL AND p.closing_time IS NOT NULL AND now()::time BETWEEN p.opening_time AND p.closing_time THEN true
     ELSE false
   END as is_open
 FROM pharmacies p 

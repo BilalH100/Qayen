@@ -22,6 +22,7 @@ type MedicationJson struct {
 }
 
 type Pharmacy struct {
+	Id        int32  `json:"id"`
 	Name      string `json:"name"`
 	City      string `json:"city"`
 	Latitude  string `json:"latitude"`
@@ -95,7 +96,7 @@ type GetUserResponse struct {
 	Name              string      `json:"name"`
 	Phone             string      `json:"phone"`
 	Role              models.Role `json:"role"`
-	ManagedPharmacyId string      `json:"managed_pharmacy_id"`
+	ManagedPharmacyId int32       `json:"managed_pharmacy"`
 }
 
 type Options struct {

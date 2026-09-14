@@ -16,6 +16,8 @@ import {
   CheckCircle,
   User,
   Pill,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import { BASE_URL } from "@/utils/api";
 import { useAuth } from "@/contexts/auth-context";
@@ -33,14 +35,30 @@ interface Pharmacy {
 
 interface Alert {
   id: number;
-  user_id: number;
-  user_name: string;
   medication_name: string;
-  medication_id: number;
-  pharmacy_id: number;
-  message: string;
-  status: string; // 'pending', 'available', 'unavailable'
+  active_substance: string;
+  customer_name: string;
+  customer_distance_km: number;
+  already_responded: boolean;
   created_at: string;
+  expires_at: string;
+}
+
+interface StockItem {
+  id: number;
+  pharmacy_id: number;
+  medication_id: number;
+  speciality: string;
+  quantity: number;
+  updated_at: string;
+}
+
+interface MedicationSearchResult {
+  id: number;
+  speciality: string;
+  active_substance: string;
+  dosage: string;
+  form: string;
 }
 
 export default function PharmacistDashboard() {
@@ -65,8 +83,20 @@ export default function PharmacistDashboard() {
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [confirmingAlert, setConfirmingAlert] = useState<number | null>(null);
 
+  // Stock state
+  const [stock, setStock] = useState<StockItem[]>([]);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockSearchTerm, setStockSearchTerm] = useState("");
+  const [stockSearchResults, setStockSearchResults] = useState<
+    MedicationSearchResult[]
+  >([]);
+  const [stockSelectedMed, setStockSelectedMed] =
+    useState<MedicationSearchResult | null>(null);
+  const [stockQuantity, setStockQuantity] = useState("10");
+  const [addingStock, setAddingStock] = useState(false);
+
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user?.managed_pharmacy_id) {
+    if (!isLoading && isAuthenticated && user?.managed_pharmacy) {
       fetchPharmacyInfo();
     } else if (!isLoading && isAuthenticated) {
       setLoading(false);
@@ -76,14 +106,115 @@ export default function PharmacistDashboard() {
   useEffect(() => {
     if (pharmacy) {
       fetchAlerts();
+      fetchStock();
     }
   }, [pharmacy]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      searchMedicationsForStock(stockSearchTerm);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [stockSearchTerm]);
+
+  const searchMedicationsForStock = async (term: string) => {
+    if (term.length < 2) {
+      setStockSearchResults([]);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${BASE_URL}/meds/search?q=${encodeURIComponent(term)}`,
+      );
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setStockSearchResults(data.slice(0, 8));
+      }
+    } catch (error) {
+      console.error("Error searching medications:", error);
+    }
+  };
+
+  const fetchStock = async () => {
+    if (!pharmacy) return;
+    setStockLoading(true);
+    try {
+      const response = await fetch(
+        `${BASE_URL}/pharmacies/id/${pharmacy.id}/stock`,
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setStock(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching stock:", error);
+    } finally {
+      setStockLoading(false);
+    }
+  };
+
+  const addStock = async () => {
+    if (!pharmacy || !stockSelectedMed) return;
+    const quantity = parseInt(stockQuantity, 10);
+    if (isNaN(quantity) || quantity < 0) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    setAddingStock(true);
+    try {
+      const response = await fetch(
+        `${BASE_URL}/pharmacies/id/${pharmacy.id}/stock`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            medication_id: stockSelectedMed.id,
+            quantity,
+          }),
+        },
+      );
+      if (response.ok) {
+        toast.success(`${stockSelectedMed.speciality} added to your stock`);
+        setStockSelectedMed(null);
+        setStockSearchTerm("");
+        setStockSearchResults([]);
+        setStockQuantity("10");
+        fetchStock();
+      } else {
+        throw new Error("Failed to add stock");
+      }
+    } catch (error) {
+      console.error("Error adding stock:", error);
+      toast.error("Failed to add medication to stock");
+    } finally {
+      setAddingStock(false);
+    }
+  };
+
+  const removeStock = async (medicationId: number) => {
+    if (!pharmacy) return;
+    try {
+      const response = await fetch(
+        `${BASE_URL}/pharmacies/id/${pharmacy.id}/stock/${medicationId}`,
+        { method: "DELETE" },
+      );
+      if (response.ok) {
+        setStock(stock.filter((item) => item.medication_id !== medicationId));
+        toast.success("Removed from stock");
+      } else {
+        throw new Error("Failed to remove stock");
+      }
+    } catch (error) {
+      console.error("Error removing stock:", error);
+      toast.error("Failed to remove medication from stock");
+    }
+  };
 
   const fetchPharmacyInfo = async () => {
     setLoading(true);
     try {
       const response = await fetch(
-        `${BASE_URL}/pharmacies/id/${user?.managed_pharmacy_id}`,
+        `${BASE_URL}/pharmacies/id/${user?.managed_pharmacy}`,
       );
       if (response.ok) {
         const data = await response.json();
@@ -120,11 +251,11 @@ export default function PharmacistDashboard() {
     setAlertsLoading(true);
     try {
       const response = await fetch(
-        `${BASE_URL}/pharmacies/${pharmacy?.id}/alerts`,
+        `${BASE_URL}/pharmacy/${pharmacy?.id}/dashboard`,
       );
       if (response.ok) {
         const data = await response.json();
-        setAlerts(data.alerts || []);
+        setAlerts(data.data?.pending_alerts || []);
       }
     } catch (error) {
       console.error("Error fetching alerts:", error);
@@ -166,20 +297,26 @@ export default function PharmacistDashboard() {
     alertId: number,
     status: "available" | "unavailable",
   ) => {
+    if (!pharmacy) return;
     setConfirmingAlert(alertId);
     try {
-      const response = await fetch(`${BASE_URL}/alerts/${alertId}/confirm`, {
-        method: "PUT",
+      const response = await fetch(`${BASE_URL}/alerts/${alertId}/response`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          pharmacy_id: pharmacy.id,
+          response_type: status,
+        }),
       });
 
       if (response.ok) {
         setAlerts(
           alerts.map((alert) =>
-            alert.id === alertId ? { ...alert, status } : alert,
+            alert.id === alertId
+              ? { ...alert, already_responded: true }
+              : alert,
           ),
         );
         toast.success(`Alert marked as ${status}`);
@@ -417,35 +554,24 @@ export default function PharmacistDashboard() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600 dark:text-slate-300">
-                      Pending
+                      Awaiting Response
                     </span>
                     <Badge
                       variant="outline"
                       className="bg-yellow-50 text-yellow-700 border-yellow-200"
                     >
-                      {alerts.filter((a) => a.status === "pending").length}
+                      {alerts.filter((a) => !a.already_responded).length}
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600 dark:text-slate-300">
-                      Available
+                      Responded
                     </span>
                     <Badge
                       variant="outline"
                       className="bg-green-50 text-green-700 border-green-200"
                     >
-                      {alerts.filter((a) => a.status === "available").length}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-600 dark:text-slate-300">
-                      Unavailable
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className="bg-red-50 text-red-700 border-red-200"
-                    >
-                      {alerts.filter((a) => a.status === "unavailable").length}
+                      {alerts.filter((a) => a.already_responded).length}
                     </Badge>
                   </div>
                 </div>
@@ -453,6 +579,113 @@ export default function PharmacistDashboard() {
             </Card>
           </div>
         </div>
+
+        {/* My Stock */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Pill className="h-5 w-5 text-teal-600" />
+              My Stock ({stock.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Only medications listed here will match when a patient sends an
+              alert — add what your pharmacy actually carries.
+            </p>
+
+            <div className="border rounded-lg p-4 space-y-3">
+              <Label>Add a medication to your stock</Label>
+              <Input
+                placeholder="Search medication name..."
+                value={stockSearchTerm}
+                onChange={(e) => {
+                  setStockSearchTerm(e.target.value);
+                  setStockSelectedMed(null);
+                }}
+              />
+              {stockSearchResults.length > 0 && !stockSelectedMed && (
+                <div className="border rounded-md divide-y max-h-56 overflow-y-auto">
+                  {stockSearchResults.map((med) => (
+                    <div
+                      key={med.id}
+                      className="p-2 cursor-pointer hover:bg-muted text-sm"
+                      onClick={() => {
+                        setStockSelectedMed(med);
+                        setStockSearchTerm(med.speciality);
+                        setStockSearchResults([]);
+                      }}
+                    >
+                      <div className="font-medium">{med.speciality}</div>
+                      <div className="text-xs text-slate-500">
+                        {med.active_substance} • {med.dosage} • {med.form}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {stockSelectedMed && (
+                <div className="flex items-end gap-2">
+                  <div className="w-32">
+                    <Label htmlFor="stock-qty">Quantity</Label>
+                    <Input
+                      id="stock-qty"
+                      type="number"
+                      min="0"
+                      value={stockQuantity}
+                      onChange={(e) => setStockQuantity(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={addStock} disabled={addingStock}>
+                    {addingStock ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {stockLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+              </div>
+            ) : stock.length > 0 ? (
+              <div className="divide-y border rounded-lg">
+                {stock.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3"
+                  >
+                    <div>
+                      <div className="font-medium">{item.speciality}</div>
+                      <div className="text-xs text-slate-500">
+                        Quantity: {item.quantity}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-600 hover:bg-red-50"
+                      onClick={() => removeStock(item.medication_id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 text-center py-4">
+                No stock added yet — search above to add your first
+                medication.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Medication Alerts */}
         <Card className="mt-6">
@@ -479,25 +712,20 @@ export default function PharmacistDashboard() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <User className="h-4 w-4 text-slate-500" />
-                          <span className="font-medium">{alert.user_name}</span>
+                          <span className="font-medium">
+                            {alert.customer_name}
+                          </span>
                           <Badge
                             variant={
-                              alert.status === "pending"
-                                ? "secondary"
-                                : alert.status === "available"
-                                  ? "default"
-                                  : "destructive"
+                              alert.already_responded ? "default" : "secondary"
                             }
                             className={
-                              alert.status === "pending"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : alert.status === "available"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
+                              alert.already_responded
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
                             }
                           >
-                            {alert.status.charAt(0).toUpperCase() +
-                              alert.status.slice(1)}
+                            {alert.already_responded ? "Responded" : "Pending"}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 mb-2">
@@ -507,14 +735,17 @@ export default function PharmacistDashboard() {
                           </span>
                         </div>
                         <p className="text-slate-600 dark:text-slate-300 text-sm">
-                          {alert.message}
+                          {alert.active_substance} •{" "}
+                          {alert.customer_distance_km.toFixed?.(1) ??
+                            alert.customer_distance_km}
+                          km away
                         </p>
                         <p className="text-xs text-slate-500 mt-1">
                           {new Date(alert.created_at).toLocaleString()}
                         </p>
                       </div>
 
-                      {alert.status === "pending" && (
+                      {!alert.already_responded && (
                         <div className="flex gap-2 ml-4">
                           <Button
                             size="sm"

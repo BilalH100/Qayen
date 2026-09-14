@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckIcon, XIcon, AlertTriangleIcon, ClockIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { BASE_URL } from "@/utils/api";
 
 interface MedicationAlert {
   id: number;
@@ -26,6 +27,7 @@ interface PharmacyStats {
 }
 
 export default function PharmacistDashboard({ params }: { params: { id: string } }) {
+  const pharmacyId = use(params).id;
   const [alerts, setAlerts] = useState<MedicationAlert[]>([]);
   const [stats, setStats] = useState<PharmacyStats>({
     alerts_received: 0,
@@ -36,13 +38,11 @@ export default function PharmacistDashboard({ params }: { params: { id: string }
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const pharmacyId = params.id;
-
   useEffect(() => {
     fetchDashboardData();
     
     // Set up real-time updates via Server-Sent Events
-    const eventSource = new EventSource(`/api/v1/pharmacy/${pharmacyId}/alerts/stream`);
+    const eventSource = new EventSource(`${BASE_URL}/pharmacy/${pharmacyId}/alerts/stream`);
     
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -65,7 +65,7 @@ export default function PharmacistDashboard({ params }: { params: { id: string }
 
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch(`/api/v1/pharmacy/${pharmacyId}/dashboard`);
+      const response = await fetch(`${BASE_URL}/pharmacy/${pharmacyId}/dashboard`);
       const data = await response.json();
       
       if (data.success) {
@@ -86,7 +86,7 @@ export default function PharmacistDashboard({ params }: { params: { id: string }
 
   const handleResponse = async (alertId: number, responseType: string, substituteData?: any) => {
     try {
-      const response = await fetch(`/api/v1/alerts/${alertId}/response`, {
+      const response = await fetch(`${BASE_URL}/alerts/${alertId}/response`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

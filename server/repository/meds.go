@@ -162,16 +162,18 @@ func (s *sqlcMedRepo) GetAll(ctx context.Context, options schemas.Options) ([]mo
 }
 
 func (s *sqlcMedRepo) GetCategories(ctx context.Context) ([]models.Category, error) {
-	var categories []models.Category
-	cat, err := s.queries.GetCategories(ctx)
+	// The `category` table is never populated by the seeder; the real
+	// classification data lives on medications.therapeutic_class instead.
+	classes, err := s.queries.GetDistinctTherapeuticClasses(ctx)
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range cat {
-		categories = append(categories, models.Category{
-			ID:   c.ID,
-			Name: c.Name,
-		})
+	categories := make([]models.Category, len(classes))
+	for i, name := range classes {
+		categories[i] = models.Category{
+			ID:   int32(i + 1),
+			Name: name,
+		}
 	}
 	return categories, nil
 }

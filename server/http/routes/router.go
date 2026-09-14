@@ -28,7 +28,7 @@ func NewRouter(s *services.Services) http.Handler {
 		r.Mount("/pharmacies", PharmacyRouter(s.PharmacyService))
 
 		if s.AlertService != nil {
-			alertHandler := handlers.NewAlertHandler(s.AlertService)
+			alertHandler := handlers.NewAlertHandler(s.AlertService, s.SSEHub)
 			r.Mount("/alerts", AlertRoutes(alertHandler))
 			r.Mount("/pharmacy", PharmacyAlertRoutes(alertHandler))
 		}

@@ -15,8 +15,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { MedicationCard } from "@/components/medication-card";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { BASE_URL } from "@/utils/api";
+import { isMedicationAvailable } from "@/utils/types";
 
 interface Medication {
   id: number;
@@ -66,6 +67,7 @@ interface MedicationPageProps {
 }
 
 export default function MedicationPage({ params }: MedicationPageProps) {
+  const { slug } = use(params);
   const [medication, setMedication] = useState<Medication | null>(null);
   const [relatedMedications, setRelatedMedications] = useState<Medication[]>(
     [],
@@ -85,7 +87,7 @@ export default function MedicationPage({ params }: MedicationPageProps) {
   useEffect(() => {
     const fetchMedication = async () => {
       try {
-        const response = await fetch(`${BASE_URL}/meds/code/${params.slug}`);
+        const response = await fetch(`${BASE_URL}/meds/code/${slug}`);
 
         if (!response.ok) {
           throw new Error("Medication not found");
@@ -119,7 +121,7 @@ export default function MedicationPage({ params }: MedicationPageProps) {
 
     // Using hardcoded coordinates for Rabat, Morocco
     console.log("Using hardcoded location: Rabat, Morocco");
-  }, [params.slug]);
+  }, [slug]);
 
   // Fetch nearby pharmacies when we have both medication and user location
   useEffect(() => {
@@ -241,7 +243,7 @@ export default function MedicationPage({ params }: MedicationPageProps) {
 
           {medication.commercial_status && (
             <div className="flex items-center gap-1.5 text-sm mb-6">
-              {medication.commercial_status === "COMMERCIALIZED" ? (
+              {isMedicationAvailable(medication.commercial_status) ? (
                 <>
                   <div className="bg-green-100 dark:bg-green-900/30 p-0.5 rounded-full">
                     <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />

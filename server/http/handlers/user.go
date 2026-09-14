@@ -80,7 +80,6 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 				httpx.RespondWithError(w, fmt.Errorf("error creating jwt: %w", err))
 				return
 			}
-			managedStr := strconv.Itoa(int(user.ManagedPharmacyID))
 			httpx.RespondWithJSON(w, http.StatusOK, schemas.LoginResponse{
 				Token: token,
 				User: schemas.GetUserResponse{
@@ -89,7 +88,7 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 					Email:             user.Email,
 					Id:                user.ID,
 					Role:              user.Role,
-					ManagedPharmacyId: managedStr,
+					ManagedPharmacyId: user.ManagedPharmacyID,
 				},
 			})
 		} else if errors.Is(err, pgx.ErrNoRows) {

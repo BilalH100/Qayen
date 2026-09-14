@@ -98,6 +98,32 @@ func (q *Queries) GetCategories(ctx context.Context) ([]Category, error) {
 	return items, nil
 }
 
+const getDistinctTherapeuticClasses = `-- name: GetDistinctTherapeuticClasses :many
+SELECT DISTINCT therapeutic_class FROM medications
+WHERE therapeutic_class IS NOT NULL AND therapeutic_class <> ''
+ORDER BY therapeutic_class
+`
+
+func (q *Queries) GetDistinctTherapeuticClasses(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, getDistinctTherapeuticClasses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var therapeuticClass string
+		if err := rows.Scan(&therapeuticClass); err != nil {
+			return nil, err
+		}
+		items = append(items, therapeuticClass)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMedicationByCode = `-- name: GetMedicationByCode :one
 SELECT id, status, commercial_status, speciality, dosage, form, presentation, pp, active_substance, therapeutic_class, epi, ppv, ph, pfht, code, tva, created_at, description, common_sd, serious_sd, general_info, category_id FROM medications WHERE code = $1
 `

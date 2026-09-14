@@ -27,3 +27,17 @@ export const ROLES = {
   PHARMACIST: "pharmacist",
   ADMIN: "admin",
 } as const;
+
+// The real seeded data stores commercial status as French free-text values
+// like "Commercialisé", "Commercialisé / AO", "Commercialisé EXPORT",
+// "Non Commercialisé", "Retiré du Marché", "Suspendu du Marché", etc.
+// A medication is available whenever the value *starts with* "Commercialisé"
+// (any suffix), and NOT when it starts with "Non Commercialisé".
+export function isMedicationAvailable(commercialStatus?: string | null) {
+  const normalized = (commercialStatus ?? "").trim().toLowerCase();
+  return (
+    normalized.startsWith("commercialisé") ||
+    normalized.startsWith("commercialise") ||
+    normalized === "active"
+  );
+}

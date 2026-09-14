@@ -13,5 +13,8 @@ func PharmacyRouter(s services.PharmacyService) http.Handler {
 	r.Get("/", handlers.GetAllPharmaciesHandler(s))
 	r.Get("/closest", handlers.GetClosestPharmacyHandler(s))
 	r.Get("/id/{id}", handlers.GetPharmacyDetailsHandler(s))
+	r.Get("/id/{id}/stock", handlers.ListPharmacyStockHandler(s))
+	r.Post("/id/{id}/stock", handlers.UpsertPharmacyStockHandler(s))
+	r.Delete("/id/{id}/stock/{medId}", handlers.DeletePharmacyStockHandler(s))
 	return r
 }
