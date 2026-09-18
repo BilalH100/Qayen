@@ -58,6 +58,7 @@ function AdminDashboardContent() {
   const [totalUsers, setTotalUsers] = React.useState(0);
   const [regularUsers, setRegularUsers] = React.useState(0);
   const [pharmacists, setPharmacists] = React.useState(0);
+  const [admins, setAdmins] = React.useState(0);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -89,17 +90,12 @@ function AdminDashboardContent() {
       const usersList = data.users || [];
       setUsers(usersList);
       setTotalUsers(data.total || 0);
-      
-      // Count users by role
-      const regularCount = usersList.filter((user: User) => 
-        user.role === 'user' || user.role === 'regular' || user.role === 'client'
-      ).length;
-      const pharmacistCount = usersList.filter((user: User) => 
-        user.role === 'pharmacist' || user.role === 'pharmacy'
-      ).length;
-      
-      setRegularUsers(regularCount);
-      setPharmacists(pharmacistCount);
+
+      // Role counts come from the backend and reflect ALL users,
+      // not just the current page.
+      setRegularUsers(data.regular || 0);
+      setPharmacists(data.pharmacist || 0);
+      setAdmins(data.admin || 0);
     } catch (error) {
       console.error(error);
     } finally {
@@ -341,7 +337,7 @@ function AdminDashboardContent() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -377,6 +373,19 @@ function AdminDashboardContent() {
               <div className="text-2xl font-bold">{pharmacists}</div>
               <p className="text-xs text-muted-foreground">
                 Healthcare providers
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Admins</CardTitle>
+              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{admins}</div>
+              <p className="text-xs text-muted-foreground">
+                Platform administrators
               </p>
             </CardContent>
           </Card>

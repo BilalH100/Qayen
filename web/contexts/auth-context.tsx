@@ -37,8 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!user;
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userData = localStorage.getItem("user");
+    const token = sessionStorage.getItem("token");
+    const userData = sessionStorage.getItem("user");
 
     if (token && userData) {
       try {
@@ -46,8 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(parsedUser);
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       } catch (error) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("user");
       }
     }
     setIsLoading(false);
@@ -64,8 +64,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = response.data.token;
         const userData = response.data.user;
 
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(userData));
+        sessionStorage.setItem("token", token);
+        sessionStorage.setItem("user", JSON.stringify(userData));
 
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
@@ -107,8 +107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     delete axios.defaults.headers.common["Authorization"];
     setUser(null);
     toast.success("You've been signed out successfully!");

@@ -47,6 +47,37 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const countUsersByRole = `-- name: CountUsersByRole :many
+SELECT user_role, COUNT(*) AS count
+FROM users
+GROUP BY user_role
+`
+
+type CountUsersByRoleRow struct {
+	UserRole UserRole
+	Count    int64
+}
+
+func (q *Queries) CountUsersByRole(ctx context.Context) ([]CountUsersByRoleRow, error) {
+	rows, err := q.db.Query(ctx, countUsersByRole)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountUsersByRoleRow
+	for rows.Next() {
+		var i CountUsersByRoleRow
+		if err := rows.Scan(&i.UserRole, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM users WHERE id = $1
 `

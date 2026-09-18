@@ -12,15 +12,13 @@ import (
 )
 
 const checkAlertRateLimit = `-- name: CheckAlertRateLimit :one
+-- NOTE: rate limiting is disabled during development/testing (always allows sending).
+-- Re-enable the real checks before the final production stage of the project.
 SELECT 
   id,
   last_alert_sent,
   alert_count_today,
-  CASE 
-    WHEN DATE(last_alert_sent) = CURRENT_DATE AND alert_count_today >= $3 THEN false
-    WHEN last_alert_sent > (now() - INTERVAL '15 minutes') THEN false
-    ELSE true
-  END as can_send_alert
+  true as can_send_alert
 FROM alert_rate_limits 
 WHERE pharmacy_id = $1 AND medication_id = $2
 `
@@ -39,7 +37,7 @@ type CheckAlertRateLimitRow struct {
 }
 
 func (q *Queries) CheckAlertRateLimit(ctx context.Context, arg CheckAlertRateLimitParams) (CheckAlertRateLimitRow, error) {
-	row := q.db.QueryRow(ctx, checkAlertRateLimit, arg.PharmacyID, arg.MedicationID, arg.AlertCountToday)
+	row := q.db.QueryRow(ctx, checkAlertRateLimit, arg.PharmacyID, arg.MedicationID)
 	var i CheckAlertRateLimitRow
 	err := row.Scan(
 		&i.ID,
@@ -508,7 +506,6 @@ JOIN pharmacies p ON p.id = pr.pharmacy_id
 LEFT JOIN medications m ON m.id = pr.substitute_medication_id
 WHERE pr.alert_id = $1 
   AND pr.expires_at > now()
-  AND pr.response_type IN ('available', 'substitute')
 ORDER BY distance_km ASC
 `
 

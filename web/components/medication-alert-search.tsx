@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,26 @@ export default function MedicationAlertSearch() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const { toast } = useToast();
   const { user } = useAuth();
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Always close any open SSE connection when the component unmounts.
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, []);
+
+  // Reset everything so the user can search for a new medication without
+  // reloading the page.
+  const resetSearch = () => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    setAlertResult(null);
+    setSelectedMedication(null);
+    setSearchTerm("");
+    setIsWaiting(false);
+    setTimeRemaining(0);
+  };
 
   // Try to get the user's real browser location as a starting point.
   // This is only a convenience default — since Kayena's seeded pharmacies
@@ -159,7 +179,9 @@ export default function MedicationAlertSearch() {
     }
 
     setIsSearching(true);
-    
+    // Close any previous connection before starting a new alert.
+    eventSourceRef.current?.close();
+
     try {
       const response = await fetch(`${BASE_URL}/alerts`, {
         method: "POST",
@@ -196,13 +218,49 @@ export default function MedicationAlertSearch() {
         }, 1000);
 
         // Set up real-time updates
-        const eventSource = new EventSource(`/api/v1/alerts/${data.data.alert_id}/stream`);
-        
+        const eventSource = new EventSource(`${BASE_URL}/alerts/${data.data.alert_id}/stream`);
+        eventSourceRef.current = eventSource;
+        const seenPharmacyIds = new Set<number>();
+
+        eventSource.onerror = (err) => {
+          console.error("Alert SSE connection error:", err, "readyState:", eventSource.readyState);
+        };
+        eventSource.onopen = () => {
+          console.log("Alert SSE connection open for alert", data.data.alert_id);
+        };
+
         eventSource.onmessage = (event) => {
           const updateData = JSON.parse(event.data);
           if (updateData.type === "new_response") {
-            // Refresh alert results
-            fetchAlertResults(data.data.alert_id);
+            // Refresh alert results, then tell the patient exactly what
+            // just came in (available, substitute, or not available).
+            fetchAlertResults(data.data.alert_id).then((pharmacies) => {
+              if (!pharmacies) return;
+              const justArrived = pharmacies.filter(
+                (p) => !seenPharmacyIds.has(p.pharmacy_id)
+              );
+              pharmacies.forEach((p) => seenPharmacyIds.add(p.pharmacy_id));
+
+              justArrived.forEach((p) => {
+                if (p.response_type === "available") {
+                  toast({
+                    title: "Medication available!",
+                    description: `${p.pharmacy_name} has it in stock.`,
+                  });
+                } else if (p.response_type === "substitute") {
+                  toast({
+                    title: "Alternative available",
+                    description: `${p.pharmacy_name} suggested a substitute.`,
+                  });
+                } else {
+                  toast({
+                    title: "Not available",
+                    description: `${p.pharmacy_name} doesn't have it in stock.`,
+                    variant: "destructive",
+                  });
+                }
+              });
+            });
           }
         };
 
@@ -242,10 +300,12 @@ export default function MedicationAlertSearch() {
       
       if (data.success) {
         setAlertResult(data.data);
+        return data.data.pharmacies as PharmacyAvailability[];
       }
     } catch (error) {
       console.error("Failed to fetch alert results:", error);
     }
+    return undefined;
   };
 
   const formatTime = (seconds: number) => {
@@ -444,7 +504,7 @@ export default function MedicationAlertSearch() {
         )}
 
         {/* Results */}
-        {alertResult && alertResult.pharmacies.length > 0 && (
+        {alertResult && alertResult.pharmacies && alertResult.pharmacies.filter(p => p.response_type !== "unavailable").length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Available Pharmacies</CardTitle>
@@ -454,7 +514,7 @@ export default function MedicationAlertSearch() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {alertResult.pharmacies.map((pharmacy) => (
+                {alertResult.pharmacies.filter(p => p.response_type !== "unavailable").map((pharmacy) => (
                   <div
                     key={pharmacy.pharmacy_id}
                     className="border rounded-lg p-4 space-y-3"
@@ -496,8 +556,27 @@ export default function MedicationAlertSearch() {
           </Card>
         )}
 
+        {/* Pharmacies that responded but don't have it — shown separately so
+            it's clear these are NOT offers to call, just information. */}
+        {alertResult && alertResult.pharmacies && alertResult.pharmacies.filter(p => p.response_type === "unavailable").length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Checked, not available</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                {alertResult.pharmacies.filter(p => p.response_type === "unavailable").map((pharmacy) => (
+                  <li key={pharmacy.pharmacy_id}>
+                    {pharmacy.pharmacy_name} — doesn't have it in stock
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
         {/* No Results */}
-        {alertResult && !isWaiting && alertResult.pharmacies.length === 0 && (
+        {alertResult && !isWaiting && (!alertResult.pharmacies || alertResult.pharmacies.filter(p => p.response_type !== "unavailable").length === 0) && (
           <Card>
             <CardContent className="text-center py-8">
               <div className="space-y-2">
@@ -507,20 +586,23 @@ export default function MedicationAlertSearch() {
                   <strong>{selectedMedication?.speciality}</strong> within the time limit.
                 </p>
                 <div className="pt-4">
-                  <Button
-                    onClick={() => {
-                      setAlertResult(null);
-                      setSelectedMedication(null);
-                      setSearchTerm("");
-                    }}
-                    variant="outline"
-                  >
+                  <Button onClick={resetSearch} variant="outline">
                     Search Again
                   </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Always available once an alert exists, so the patient is never stuck
+            needing a page refresh to search for something else. */}
+        {alertResult && (isWaiting || (alertResult.pharmacies && alertResult.pharmacies.length > 0)) && (
+          <div className="text-center">
+            <Button onClick={resetSearch} variant="outline">
+              Search another medication
+            </Button>
+          </div>
         )}
       </div>
     </div>

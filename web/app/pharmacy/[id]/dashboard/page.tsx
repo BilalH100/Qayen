@@ -47,10 +47,13 @@ export default function PharmacistDashboard({ params }: { params: { id: string }
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "new_alert") {
-        setAlerts(prev => [data.alert, ...prev]);
+        // The backend only pushes a lightweight { type, alert_id } event over
+        // SSE (no full alert payload), so refetch the dashboard to get the
+        // complete, joined alert data instead of inserting a partial object.
+        fetchDashboardData();
         toast({
           title: "New Medication Alert",
-          description: `${data.alert.customer_name} is looking for ${data.alert.medication_name}`,
+          description: "A patient nearby is looking for a medication you may have.",
           duration: 5000,
         });
       } else if (data.type === "alert_expired") {

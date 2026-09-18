@@ -12,6 +12,7 @@ type UserService interface {
 	GetUserProfileByEmail(ctx context.Context, email string) (*models.User, error)
 	RegisterUser(ctx context.Context, user models.User) error
 	List(ctx context.Context, options schemas.Options) ([]models.User, error)
+	CountByRole(ctx context.Context) (map[models.Role]int64, error)
 	DeleteUser(ctx context.Context, id int32) error
 	UpdateUserRole(ctx context.Context, id int32, role models.Role) (*models.User, error)
 	UpdateUserPharmacy(ctx context.Context, userID int32, pharmacyId int32) (*models.User, error)
@@ -39,6 +40,10 @@ func (s *userService) RegisterUser(ctx context.Context, user models.User) error 
 
 func (s *userService) List(ctx context.Context, options schemas.Options) ([]models.User, error) {
 	return s.userRepo.List(ctx, options)
+}
+
+func (s *userService) CountByRole(ctx context.Context) (map[models.Role]int64, error) {
+	return s.userRepo.CountByRole(ctx)
 }
 
 func (s *userService) DeleteUser(ctx context.Context, id int32) error {

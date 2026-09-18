@@ -147,9 +147,25 @@ func ListAllUsersHandler(s services.UserService) http.HandlerFunc {
 			httpx.RespondWithError(w, fmt.Errorf("error getting user list"))
 			return
 		}
-		users := make(map[string][]models.User)
-		users["users"] = res
-		httpx.RespondWithJSON(w, http.StatusOK, users)
+
+		roleCounts, err := s.CountByRole(r.Context())
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("error getting user counts"))
+			return
+		}
+
+		var total int64
+		for _, count := range roleCounts {
+			total += count
+		}
+
+		httpx.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
+			"users":      res,
+			"total":      total,
+			"regular":    roleCounts[models.Regular],
+			"pharmacist": roleCounts[models.Pharmacist],
+			"admin":      roleCounts[models.Admin],
+		})
 	}
 }
 

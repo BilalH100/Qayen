@@ -31,6 +31,11 @@ SET user_role = $2
 WHERE id = $1
 RETURNING *;
 
+-- name: CountUsersByRole :many
+SELECT user_role, COUNT(*) AS count
+FROM users
+GROUP BY user_role;
+
 -- name: UpdateUserManagedPharmacy :one 
 UPDATE users 
 SET managed_pharmacy_id = $2

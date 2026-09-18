@@ -13,6 +13,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	List(ctx context.Context, options schemas.Options) ([]models.User, error)
+	CountByRole(ctx context.Context) (map[models.Role]int64, error)
 	Delete(ctx context.Context, id int32) error
 	UpdateRole(ctx context.Context, id int32, role models.Role) (*models.User, error)
 	UpdateManagedPharmacy(ctx context.Context, userID int32, pharmacyID int32) (*models.User, error)
@@ -90,6 +91,18 @@ func (r *sqlcUserRepo) List(ctx context.Context, options schemas.Options) ([]mod
 		})
 	}
 	return users, nil
+}
+
+func (r *sqlcUserRepo) CountByRole(ctx context.Context) (map[models.Role]int64, error) {
+	rows, err := r.queries.CountUsersByRole(ctx)
+	if err != nil {
+		return nil, wrap(err, "")
+	}
+	counts := make(map[models.Role]int64)
+	for _, row := range rows {
+		counts[models.Role(row.UserRole)] = row.Count
+	}
+	return counts, nil
 }
 
 func (r *sqlcUserRepo) Delete(ctx context.Context, id int32) error {
