@@ -591,8 +591,8 @@ func (s *AlertService) GetAlertResults(ctx context.Context, alertID int32, custo
 			Longitude:       resp.PharmacyLongitude.Float64,
 			DistanceKM:      float64(resp.DistanceKm),
 			ResponseType:    resp.ResponseType,
-			SubstituteBrand: resp.SubstituteBrand,
-			SubstituteNotes: resp.SubstituteNotes,
+			SubstituteBrand: resp.SubstituteBrand.String,
+			SubstituteNotes: resp.SubstituteNotes.String,
 			ResponseTime:    resp.ResponseTimeSeconds.Int32,
 		}
 	}

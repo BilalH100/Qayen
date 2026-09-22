@@ -13,6 +13,7 @@ import (
 type PharmacyRepository interface {
 	GetById(ctx context.Context, id int32) (*schemas.Pharmacy, error)
 	Create(ctx context.Context, p *schemas.Pharmacy) error
+	Update(ctx context.Context, id int32, p *schemas.Pharmacy) (*schemas.Pharmacy, error)
 	GetClosest(ctx context.Context, c schemas.Coordinates, medId int32) (*float64, *schemas.Pharmacy, error)
 	GetAll(ctx context.Context) ([]models.Pharmacy, error)
 	ListStock(ctx context.Context, pharmacyId int32) ([]models.StockItem, error)
@@ -68,6 +69,38 @@ func (s *sqlcPharmacyRepo) Create(ctx context.Context, p *schemas.Pharmacy) erro
 		return wrap(err, "")
 	}
 	return nil
+}
+
+func (s *sqlcPharmacyRepo) Update(ctx context.Context, id int32, p *schemas.Pharmacy) (*schemas.Pharmacy, error) {
+	// Fetch current record so we preserve latitude/longitude, which the
+	// pharmacy-info edit form never sends.
+	current, err := s.queries.GetPharmacyByID(ctx, id)
+	if err != nil {
+		return nil, wrap(err, "")
+	}
+
+	res, err := s.queries.UpdatePharmacy(ctx, sqlc.UpdatePharmacyParams{
+		ID:        id,
+		Name:      p.Name,
+		Address:   p.Address,
+		Latitude:  current.Latitude,
+		Longitude: current.Longitude,
+		City:      p.City,
+		Phone:     p.Phone,
+	})
+	if err != nil {
+		return nil, wrap(err, "")
+	}
+
+	return &schemas.Pharmacy{
+		Id:        res.ID,
+		Name:      res.Name,
+		City:      res.City,
+		Latitude:  utils.Float8ToString(res.Latitude),
+		Longitude: utils.Float8ToString(res.Longitude),
+		Address:   res.Address,
+		Phone:     res.Phone,
+	}, nil
 }
 
 func (s *sqlcPharmacyRepo) GetClosest(ctx context.Context, c schemas.Coordinates, medId int32) (*float64, *schemas.Pharmacy, error) {

@@ -268,11 +268,12 @@ func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request)
 	}
 	pharmacyID := int32(pharmacyID64)
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		utils.ErrorResponse(w, http.StatusInternalServerError, "Streaming unsupported")
-		return
-	}
+	// Use ResponseController instead of a raw `w.(http.Flusher)` assertion:
+	// the latter fails whenever w has been wrapped by other middleware
+	// (e.g. the golog.Log logging wrapper in main.go), even though the
+	// underlying writer can flush just fine. ResponseController knows how
+	// to see through such wrappers.
+	rc := http.NewResponseController(w)
 
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -280,7 +281,10 @@ func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
-	flusher.Flush()
+	if err := rc.Flush(); err != nil && errors.Is(err, http.ErrNotSupported) {
+		utils.ErrorResponse(w, http.StatusInternalServerError, "Streaming unsupported")
+		return
+	}
 
 	// Create a channel for this connection and register it with the hub
 	clientChan := make(chan string, 10)
@@ -299,10 +303,10 @@ func (h *AlertHandler) PharmacyAlertsSSE(w http.ResponseWriter, r *http.Request)
 				return
 			}
 			w.Write([]byte("data: " + msg + "\n\n"))
-			flusher.Flush()
+			rc.Flush()
 		case <-ticker.C:
 			w.Write([]byte("data: {\"type\":\"heartbeat\"}\n\n"))
-			flusher.Flush()
+			rc.Flush()
 		case <-r.Context().Done():
 			// Client disconnected
 			return
@@ -320,11 +324,9 @@ func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request)
 	}
 	alertID := int32(alertID64)
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		utils.ErrorResponse(w, http.StatusInternalServerError, "Streaming unsupported")
-		return
-	}
+	// See PharmacyAlertsSSE above for why ResponseController is used here
+	// instead of a raw `w.(http.Flusher)` assertion.
+	rc := http.NewResponseController(w)
 
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -332,7 +334,10 @@ func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
-	flusher.Flush()
+	if err := rc.Flush(); err != nil && errors.Is(err, http.ErrNotSupported) {
+		utils.ErrorResponse(w, http.StatusInternalServerError, "Streaming unsupported")
+		return
+	}
 
 	// Create a channel for this connection and register it with the hub
 	clientChan := make(chan string, 10)
@@ -350,10 +355,10 @@ func (h *AlertHandler) CustomerAlertsSSE(w http.ResponseWriter, r *http.Request)
 				return
 			}
 			w.Write([]byte("data: " + msg + "\n\n"))
-			flusher.Flush()
+			rc.Flush()
 		case <-ticker.C:
 			w.Write([]byte("data: {\"type\":\"heartbeat\"}\n\n"))
-			flusher.Flush()
+			rc.Flush()
 		case <-r.Context().Done():
 			// Client disconnected
 			return

@@ -60,11 +60,15 @@ export default function MedicationAlertSearch() {
   const { toast } = useToast();
   const { user } = useAuth();
   const eventSourceRef = useRef<EventSource | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always close any open SSE connection when the component unmounts.
   useEffect(() => {
     return () => {
       eventSourceRef.current?.close();
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (autoCloseTimeoutRef.current) clearTimeout(autoCloseTimeoutRef.current);
     };
   }, []);
 
@@ -73,6 +77,14 @@ export default function MedicationAlertSearch() {
   const resetSearch = () => {
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
+    }
     setAlertResult(null);
     setSelectedMedication(null);
     setSearchTerm("");
@@ -216,6 +228,7 @@ export default function MedicationAlertSearch() {
             return prev - 1;
           });
         }, 1000);
+        countdownIntervalRef.current = countdownInterval;
 
         // Set up real-time updates
         const eventSource = new EventSource(`${BASE_URL}/alerts/${data.data.alert_id}/stream`);
@@ -232,8 +245,18 @@ export default function MedicationAlertSearch() {
         eventSource.onmessage = (event) => {
           const updateData = JSON.parse(event.data);
           if (updateData.type === "new_response") {
+            // A pharmacist just responded (available, substitute, or not
+            // available) — stop the "waiting" countdown right away instead
+            // of leaving the 2-minute box up until it times out.
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+              countdownIntervalRef.current = null;
+            }
+            setIsWaiting(false);
+
             // Refresh alert results, then tell the patient exactly what
-            // just came in (available, substitute, or not available).
+            // just came in (available, substitute, or not available),
+            // including which pharmacy (name + id) it came from.
             fetchAlertResults(data.data.alert_id).then((pharmacies) => {
               if (!pharmacies) return;
               const justArrived = pharmacies.filter(
@@ -245,17 +268,17 @@ export default function MedicationAlertSearch() {
                 if (p.response_type === "available") {
                   toast({
                     title: "Medication available!",
-                    description: `${p.pharmacy_name} has it in stock.`,
+                    description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) has it in stock.`,
                   });
                 } else if (p.response_type === "substitute") {
                   toast({
                     title: "Alternative available",
-                    description: `${p.pharmacy_name} suggested a substitute.`,
+                    description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) suggested a substitute.`,
                   });
                 } else {
                   toast({
                     title: "Not available",
-                    description: `${p.pharmacy_name} doesn't have it in stock.`,
+                    description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) doesn't have it in stock.`,
                     variant: "destructive",
                   });
                 }
@@ -265,7 +288,7 @@ export default function MedicationAlertSearch() {
         };
 
         // Clean up event source when component unmounts or search completes
-        setTimeout(() => {
+        autoCloseTimeoutRef.current = setTimeout(() => {
           eventSource.close();
         }, 2 * 60 * 1000); // 2 minutes
 

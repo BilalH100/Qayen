@@ -1,6 +1,6 @@
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, MapPin, X, Loader2, Bell, CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +87,18 @@ export function HeroSearch() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const seenPharmacyIdsRef = useRef<Set<number>>(new Set());
+
+  // Always close any open SSE connection / countdown when the component
+  // unmounts.
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, []);
 
   // For testing - always use hardcoded coordinates for Rabat
   const getUserLocation = () => {
@@ -153,6 +165,9 @@ export function HeroSearch() {
     if (!selectedMedication || !isAuthenticated || !user) return;
 
     setCreatingAlert(true);
+    // Close any previous connection before starting a new alert.
+    eventSourceRef.current?.close();
+    seenPharmacyIdsRef.current = new Set();
     try {
       const response = await fetch(`${BASE_URL}/alerts`, {
         method: "POST",
@@ -188,10 +203,12 @@ export function HeroSearch() {
           description: "Your medication alert has been sent to nearby pharmacies",
         });
 
-        // Start countdown timer
+        // Start the visual countdown (a progress indicator only — it no
+        // longer decides when the "waiting" state ends).
         startCountdownTimer();
-        // Start polling for responses
-        pollForResponses(alertData.alert_id);
+        // Listen for pharmacist responses in real time instead of polling,
+        // so the waiting box disappears the instant a pharmacy responds.
+        listenForResponses(alertData.alert_id);
       } else {
         const errorData = await response.json();
         toast({
@@ -213,54 +230,107 @@ export function HeroSearch() {
   };
 
   const startCountdownTimer = () => {
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+          countdownIntervalRef.current = null;
           setWaitingForResponses(false);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+    countdownIntervalRef.current = interval;
   };
 
-  const pollForResponses = async (alertId: number) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(
-          `${BASE_URL}/alerts/${alertId}/results?lat=${userCoordinates.latitude}&lng=${userCoordinates.longitude}`,
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          const result = data.data;
-          setAlertResult((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  status: result?.status || prev.status,
-                  pharmacies: result?.pharmacies || [],
-                }
-              : null,
-          );
-
-          // Stop polling if we have responses or time is up
-          if (result?.pharmacies?.length > 0 || timeRemaining <= 0) {
-            clearInterval(pollInterval);
-            setWaitingForResponses(false);
-          }
-        }
-      } catch (error) {
-        console.error("Error polling for responses:", error);
+  const fetchAlertResults = async (alertId: number) => {
+    try {
+      const response = await fetch(
+        `${BASE_URL}/alerts/${alertId}/results?lat=${userCoordinates.latitude}&lng=${userCoordinates.longitude}`,
+      );
+      if (response.ok) {
+        const data = await response.json();
+        return data.data;
       }
-    }, 5000); // Poll every 5 seconds
+    } catch (error) {
+      console.error("Error fetching alert results:", error);
+    }
+    return undefined;
+  };
 
-    // Clean up after 2 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval);
+  // Real-time updates: as soon as a pharmacist picks "available", "not
+  // available", or "substitute" on their dashboard, the backend pushes a
+  // "new_response" event over SSE. We use that (instead of polling every
+  // 5s) to close the waiting box immediately and tell the patient exactly
+  // which pharmacy (name + id) responded and with what.
+  const listenForResponses = (alertId: number) => {
+    console.log("[alert] connecting to SSE stream for alert", alertId, `${BASE_URL}/alerts/${alertId}/stream`);
+    const eventSource = new EventSource(`${BASE_URL}/alerts/${alertId}/stream`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      console.log("[alert] SSE connection OPEN for alert", alertId);
+    };
+
+    eventSource.onmessage = async (event) => {
+      console.log("[alert] SSE message received:", event.data);
+      const updateData = JSON.parse(event.data);
+      if (updateData.type !== "new_response") return;
+
+      const result = await fetchAlertResults(alertId);
+      if (!result) return;
+
+      const pharmacies: PharmacyResponse[] = result.pharmacies || [];
+      setAlertResult((prev) =>
+        prev
+          ? { ...prev, status: result.status || prev.status, pharmacies }
+          : null,
+      );
+
+      // A response is in — stop waiting right away instead of leaving the
+      // 2-minute box up until it times out.
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
       setWaitingForResponses(false);
-    }, 120000);
+
+      const justArrived = pharmacies.filter(
+        (p) => !seenPharmacyIdsRef.current.has(p.pharmacy_id),
+      );
+      pharmacies.forEach((p) => seenPharmacyIdsRef.current.add(p.pharmacy_id));
+
+      justArrived.forEach((p) => {
+        if (p.response_type === "available") {
+          toast({
+            title: "Medication available!",
+            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) has it in stock.`,
+          });
+        } else if (p.response_type === "substitute") {
+          toast({
+            title: "Alternative available",
+            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) suggested a substitute.`,
+          });
+        } else {
+          toast({
+            title: "Not available",
+            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) doesn't have it in stock.`,
+            variant: "destructive",
+          });
+        }
+      });
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("[alert] SSE connection error for alert", alertId, err, "readyState:", eventSource.readyState);
+    };
+
+    // Safety net: close the stream after 2 minutes regardless.
+    setTimeout(() => {
+      eventSource.close();
+    }, 2 * 60 * 1000);
   };
 
   const handleMedicationSelect = (medication: Medication) => {
@@ -512,7 +582,12 @@ export function HeroSearch() {
                       <CardHeader className="pb-2">
                         <div className="flex items-start justify-between">
                           <div>
-                            <CardTitle className="text-lg">{pharmacy.pharmacy_name}</CardTitle>
+                            <CardTitle className="text-lg">
+                              {pharmacy.pharmacy_name}{" "}
+                              <span className="text-sm font-normal text-slate-500">
+                                (ID: {pharmacy.pharmacy_id})
+                              </span>
+                            </CardTitle>
                             <p className="text-sm text-slate-600 dark:text-slate-300">
                               {pharmacy.pharmacy_address}
                             </p>
@@ -520,19 +595,25 @@ export function HeroSearch() {
                               {pharmacy.distance_km.toFixed(1)} km away
                             </p>
                           </div>
-                          <Badge 
-                            variant={pharmacy.response_type === 'available' ? 'default' : 'secondary'}
+                          <Badge
+                            variant={pharmacy.response_type === 'unavailable' ? 'secondary' : 'default'}
                             className={
-                              pharmacy.response_type === 'available' 
+                              pharmacy.response_type === 'available'
                                 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300'
+                                : pharmacy.response_type === 'substitute'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300'
+                                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
                             }
                           >
-                            {pharmacy.response_type === 'available' ? 'In Stock' : 'Substitute Available'}
+                            {pharmacy.response_type === 'available'
+                              ? 'In Stock'
+                              : pharmacy.response_type === 'substitute'
+                              ? 'Substitute Available'
+                              : 'Not Available'}
                           </Badge>
                         </div>
                       </CardHeader>
-                      {(pharmacy.substitute_brand || pharmacy.substitute_notes) && (
+                      {pharmacy.response_type !== 'unavailable' && (
                         <CardContent className="pt-0">
                           {pharmacy.substitute_brand && (
                             <p className="text-sm text-slate-600 dark:text-slate-300">

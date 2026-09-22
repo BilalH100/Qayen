@@ -70,13 +70,14 @@ ON CONFLICT (alert_id, pharmacy_id) DO NOTHING
 RETURNING *;
 
 -- name: CheckAlertRateLimit :one
--- NOTE: rate limiting is disabled during development/testing (always allows sending).
--- Re-enable the real checks before the final production stage of the project.
 SELECT 
   id,
   last_alert_sent,
   alert_count_today,
-  true as can_send_alert
+  CASE 
+    WHEN DATE(last_alert_sent) = CURRENT_DATE AND alert_count_today >= $3 THEN false
+    ELSE true
+  END as can_send_alert
 FROM alert_rate_limits 
 WHERE pharmacy_id = $1 AND medication_id = $2;
 

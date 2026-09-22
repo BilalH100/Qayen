@@ -6,6 +6,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Toaster } from "@/components/ui/sonner"
+import { Toaster as ShadcnToaster } from "@/components/ui/toaster"
 import type { Metadata } from "next"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -32,6 +33,7 @@ export default function RootLayout({
               <Footer />
             </div>
             <Toaster />
+            <ShadcnToaster />
           </AuthProvider>
         </ThemeProvider>
       </body>

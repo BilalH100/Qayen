@@ -101,6 +101,34 @@ func GetPharmacyDetailsHandler(s services.PharmacyService) http.HandlerFunc {
 	}
 }
 
+// UpdatePharmacyHandler updates a pharmacy's editable info (name, address, city, phone).
+func UpdatePharmacyHandler(s services.PharmacyService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := chi.URLParam(r, "id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("error parsing id string"))
+			return
+		}
+
+		var body schemas.Pharmacy
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("invalid request body"))
+			return
+		}
+
+		res, err := s.UpdateService(r.Context(), int32(id), &body)
+		if err != nil {
+			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
+			return
+		}
+
+		pharmacy := make(map[string]schemas.Pharmacy)
+		pharmacy["pharmacy"] = *res
+		httpx.RespondWithJSON(w, http.StatusOK, pharmacy)
+	}
+}
+
 // ListPharmacyStockHandler returns everything a pharmacy currently has on hand.
 func ListPharmacyStockHandler(s services.PharmacyService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

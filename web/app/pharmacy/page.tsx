@@ -269,7 +269,7 @@ export default function PharmacistDashboard() {
 
     setUpdating(true);
     try {
-      const response = await fetch(`${BASE_URL}/pharmacies/${pharmacy.id}`, {
+      const response = await fetch(`${BASE_URL}/pharmacies/id/${pharmacy.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

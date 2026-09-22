@@ -12,13 +12,14 @@ import (
 )
 
 const checkAlertRateLimit = `-- name: CheckAlertRateLimit :one
--- NOTE: rate limiting is disabled during development/testing (always allows sending).
--- Re-enable the real checks before the final production stage of the project.
 SELECT 
   id,
   last_alert_sent,
   alert_count_today,
-  true as can_send_alert
+  CASE 
+    WHEN DATE(last_alert_sent) = CURRENT_DATE AND alert_count_today >= $3 THEN false
+    ELSE true
+  END as can_send_alert
 FROM alert_rate_limits 
 WHERE pharmacy_id = $1 AND medication_id = $2
 `
@@ -37,7 +38,7 @@ type CheckAlertRateLimitRow struct {
 }
 
 func (q *Queries) CheckAlertRateLimit(ctx context.Context, arg CheckAlertRateLimitParams) (CheckAlertRateLimitRow, error) {
-	row := q.db.QueryRow(ctx, checkAlertRateLimit, arg.PharmacyID, arg.MedicationID)
+	row := q.db.QueryRow(ctx, checkAlertRateLimit, arg.PharmacyID, arg.MedicationID, arg.AlertCountToday)
 	var i CheckAlertRateLimitRow
 	err := row.Scan(
 		&i.ID,
@@ -506,6 +507,7 @@ JOIN pharmacies p ON p.id = pr.pharmacy_id
 LEFT JOIN medications m ON m.id = pr.substitute_medication_id
 WHERE pr.alert_id = $1 
   AND pr.expires_at > now()
+  AND pr.response_type IN ('available', 'substitute')
 ORDER BY distance_km ASC
 `
 
@@ -521,8 +523,8 @@ type GetPharmacistResponsesForAlertRow struct {
 	PharmacyID               pgtype.Int4
 	ResponseType             string
 	SubstituteMedicationID   pgtype.Int4
-	SubstituteBrand          string
-	SubstituteNotes          string
+	SubstituteBrand          pgtype.Text
+	SubstituteNotes          pgtype.Text
 	ResponseTimeSeconds      pgtype.Int4
 	RespondedAt              pgtype.Timestamp
 	ExpiresAt                pgtype.Timestamp
@@ -531,7 +533,7 @@ type GetPharmacistResponsesForAlertRow struct {
 	PharmacyPhone            string
 	PharmacyLatitude         pgtype.Float8
 	PharmacyLongitude        pgtype.Float8
-	SubstituteMedicationName string
+	SubstituteMedicationName pgtype.Text
 	DistanceKm               float64
 }
 
