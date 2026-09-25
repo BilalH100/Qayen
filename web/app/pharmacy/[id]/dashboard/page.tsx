@@ -56,7 +56,7 @@ export default function PharmacistDashboard({ params }: { params: { id: string }
           description: "A patient nearby is looking for a medication you may have.",
           duration: 5000,
         });
-      } else if (data.type === "alert_expired") {
+      } else if (data.type === "alert_expired" || data.type === "alert_completed") {
         setAlerts(prev => prev.filter(alert => alert.id !== data.alert_id));
       }
     };

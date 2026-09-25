@@ -19,6 +19,15 @@ UPDATE medication_alerts
 SET status = 'expired'
 WHERE id = $1 AND status = 'pending';
 
+-- name: CompleteMedicationAlert :one
+-- Marks an alert fulfilled once a patient confirms pickup. Guarded on
+-- status = 'pending' so it fails (no row / ErrNoRows) if the alert was
+-- already completed, cancelled or expired by something else.
+UPDATE medication_alerts 
+SET status = 'completed'
+WHERE id = $1 AND status = 'pending'
+RETURNING *;
+
 -- name: GetActiveMedicationAlerts :many
 SELECT * FROM medication_alerts 
 WHERE status = 'pending' AND expires_at > now()
@@ -119,6 +128,7 @@ SELECT
   p.latitude as pharmacy_latitude,
   p.longitude as pharmacy_longitude,
   m.speciality as substitute_medication_name,
+  st.quantity as available_quantity,
   (
     6371 * acos(
       cos(radians($2)) *
@@ -130,7 +140,9 @@ SELECT
   ) AS distance_km
 FROM pharmacist_responses pr
 JOIN pharmacies p ON p.id = pr.pharmacy_id
+JOIN medication_alerts ma ON ma.id = pr.alert_id
 LEFT JOIN medications m ON m.id = pr.substitute_medication_id
+LEFT JOIN stock st ON st.pharmacy_id = pr.pharmacy_id AND st.medication_id = ma.medication_id
 WHERE pr.alert_id = $1 
   AND pr.expires_at > now()
 ORDER BY distance_km ASC;

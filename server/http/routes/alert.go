@@ -17,6 +17,9 @@ func AlertRoutes(alertHandler *handlers.AlertHandler) chi.Router {
 	// Pharmacist
 	r.Post("/{id}/response", alertHandler.SubmitPharmacistResponse)
 
+	// Customer confirms pickup of a given quantity from a responding pharmacy
+	r.Post("/{id}/confirm", alertHandler.ConfirmPickup)
+
 	// Admin
 	r.Post("/cleanup", alertHandler.CleanupExpiredAlerts)
 

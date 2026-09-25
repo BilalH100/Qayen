@@ -186,6 +186,56 @@ func (h *AlertHandler) SubmitPharmacistResponse(w http.ResponseWriter, r *http.R
 	})
 }
 
+// ConfirmPickup handles POST /api/alerts/{id}/confirm
+// Called when the patient taps "Confirm & take" on an "available" response,
+// with the quantity they're picking up.
+func (h *AlertHandler) ConfirmPickup(w http.ResponseWriter, r *http.Request) {
+	alertIDStr := chi.URLParam(r, "id")
+	alertID, err := strconv.ParseInt(alertIDStr, 10, 32)
+	if err != nil {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid alert ID format: must be a positive integer")
+		return
+	}
+
+	if alertID <= 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Alert ID must be positive")
+		return
+	}
+
+	var req services.ConfirmPickupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid JSON in request body: "+err.Error())
+		return
+	}
+
+	// Set alert ID from URL parameter (never trust a mismatched body value)
+	req.AlertID = int32(alertID)
+
+	if req.PharmacyID <= 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Valid pharmacy ID is required")
+		return
+	}
+
+	if req.Quantity <= 0 {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Quantity must be greater than zero")
+		return
+	}
+
+	result, err := h.alertService.ConfirmPickup(r.Context(), req)
+	if err != nil {
+		h.handleAlertError(w, err, "Failed to confirm pickup")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Pickup confirmed",
+		"data":    result,
+	})
+}
+
 // GetPharmacyDashboard handles GET /api/pharmacy/{id}/dashboard
 func (h *AlertHandler) GetPharmacyDashboard(w http.ResponseWriter, r *http.Request) {
 	pharmacyIDStr := chi.URLParam(r, "id")

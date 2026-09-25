@@ -51,10 +51,12 @@ interface PharmacyResponse {
   response_type: string;
   substitute_brand?: string;
   substitute_notes?: string;
+  available_quantity: number;
 }
 
 interface AlertResult {
   alert_id: number;
+  medication_id: number;
   status: string;
   pharmacies: PharmacyResponse[];
   created_at: string;
@@ -85,6 +87,12 @@ export function HeroSearch() {
     longitude: "-6.857842157069873",
   });
   const [locationError, setLocationError] = useState<string | null>(null);
+  // Quantity the patient has typed for each pharmacy's "Confirm & take"
+  // input, keyed by pharmacy_id, plus which pharmacy (if any) is currently
+  // being confirmed and which one has already been confirmed.
+  const [confirmQuantities, setConfirmQuantities] = useState<Record<number, string>>({});
+  const [confirmingPharmacyId, setConfirmingPharmacyId] = useState<number | null>(null);
+  const [confirmedPharmacyId, setConfirmedPharmacyId] = useState<number | null>(null);
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -189,6 +197,7 @@ export function HeroSearch() {
         const alertData = responseData.data;
         setAlertResult({
           alert_id: alertData.alert_id,
+          medication_id: alertData.medication_id,
           status: "waiting",
           pharmacies: [],
           created_at: new Date().toISOString(),
@@ -331,6 +340,71 @@ export function HeroSearch() {
     setTimeout(() => {
       eventSource.close();
     }, 2 * 60 * 1000);
+  };
+
+  const handleConfirmPickup = async (pharmacy: PharmacyResponse) => {
+    if (!alertResult) return;
+
+    const rawQuantity = confirmQuantities[pharmacy.pharmacy_id] ?? "";
+    const quantity = parseInt(rawQuantity, 10);
+
+    if (!rawQuantity || isNaN(quantity) || quantity <= 0) {
+      toast({
+        title: "Enter a quantity",
+        description: "Please enter how many you'd like to take.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (pharmacy.available_quantity > 0 && quantity > pharmacy.available_quantity) {
+      toast({
+        title: "Not enough in stock",
+        description: `${pharmacy.pharmacy_name} only has ${pharmacy.available_quantity} available.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setConfirmingPharmacyId(pharmacy.pharmacy_id);
+    try {
+      const response = await fetch(
+        `${BASE_URL}/alerts/${alertResult.alert_id}/confirm`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pharmacy_id: pharmacy.pharmacy_id,
+            quantity,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        setConfirmedPharmacyId(pharmacy.pharmacy_id);
+        toast({
+          title: "Pickup confirmed",
+          description: `You're all set to pick up ${quantity} from ${pharmacy.pharmacy_name}.`,
+        });
+      } else {
+        const errorData = await response.json();
+        toast({
+          title: "Couldn't confirm pickup",
+          description:
+            errorData.error?.message || errorData.error || "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error confirming pickup:", error);
+      toast({
+        title: "Network Error",
+        description: "Unable to confirm pickup. Please check your connection.",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmingPharmacyId(null);
+    }
   };
 
   const handleMedicationSelect = (medication: Medication) => {
@@ -625,7 +699,7 @@ export function HeroSearch() {
                               <span className="font-medium">Notes:</span> {pharmacy.substitute_notes}
                             </p>
                           )}
-                          <div className="mt-3 flex items-center gap-2">
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
                             <Button 
                               size="sm" 
                               className="bg-teal-600 hover:bg-teal-700"
@@ -644,6 +718,49 @@ export function HeroSearch() {
                               View on Map
                             </Button>
                           </div>
+                          {pharmacy.response_type === 'available' && (
+                            confirmedPharmacyId === pharmacy.pharmacy_id ? (
+                              <div className="mt-3 flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+                                <CheckCircle className="h-4 w-4" />
+                                Pickup confirmed
+                              </div>
+                            ) : (
+                              <div className="mt-3 flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={pharmacy.available_quantity > 0 ? pharmacy.available_quantity : undefined}
+                                  placeholder="Qty"
+                                  className="h-8 w-20"
+                                  value={confirmQuantities[pharmacy.pharmacy_id] ?? ""}
+                                  onChange={(e) =>
+                                    setConfirmQuantities((prev) => ({
+                                      ...prev,
+                                      [pharmacy.pharmacy_id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-teal-600 text-teal-700 hover:bg-teal-50 dark:text-teal-400"
+                                  disabled={confirmingPharmacyId === pharmacy.pharmacy_id}
+                                  onClick={() => handleConfirmPickup(pharmacy)}
+                                >
+                                  {confirmingPharmacyId === pharmacy.pharmacy_id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    "Confirm & Take"
+                                  )}
+                                </Button>
+                                {pharmacy.available_quantity > 0 && (
+                                  <span className="text-xs text-slate-500">
+                                    {pharmacy.available_quantity} available
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          )}
                         </CardContent>
                       )}
                     </Card>

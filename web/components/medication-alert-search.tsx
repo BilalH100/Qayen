@@ -10,6 +10,7 @@ import { SearchIcon, MapPinIcon, ClockIcon, PhoneIcon, CheckIcon, AlertTriangleI
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { BASE_URL } from "@/utils/api";
+import LocationPickerMap from "@/components/location-picker-map";
 
 interface Medication {
   id: number;
@@ -92,25 +93,14 @@ export default function MedicationAlertSearch() {
     setTimeRemaining(0);
   };
 
-  // Try to get the user's real browser location as a starting point.
-  // This is only a convenience default — since Kayena's seeded pharmacies
-  // are currently all in Rabat, use the address search below to test
-  // from anywhere else.
+  // Start in Rabat so the map is immediately usable.
+  // The user can click anywhere or drag the pin to choose the
+  // exact location that will be sent to the backend.
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-          setLocationLabel("Your current location");
-        },
-        () => {
-          // Silently ignore — the address search below covers this case.
-        }
-      );
-    }
+    setLocation((current) =>
+      current ?? { lat: 34.0209, lng: -6.8416 },
+    );
+    setLocationLabel((current) => current || "Rabat, Morocco");
   }, []);
 
   // Debounced address -> coordinates lookup (OpenStreetMap Nominatim, free, no API key)
@@ -404,75 +394,115 @@ export default function MedicationAlertSearch() {
               )}
 
               {/* Location */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Search location</label>
-                <div className="relative">
-                  <MapPinIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Type a city or address (e.g. Rabat, Morocco)..."
-                    value={addressInput}
-                    onChange={(e) => setAddressInput(e.target.value)}
-                    className="pl-10"
-                  />
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">
+                    Patient location
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Choose the patient's location on the Rabat map.
+                  </p>
                 </div>
-                {geocoding && (
-                  <p className="text-xs text-muted-foreground">Searching...</p>
-                )}
-                {addressResults.length > 0 && (
-                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-                    {addressResults.map((result, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => chooseAddress(result)}
-                        className="p-2 text-sm cursor-pointer hover:bg-muted"
-                      >
-                        {result.label}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span className="flex items-center">
-                    <MapPinIcon className="h-4 w-4 mr-1" />
-                    {location
-                      ? locationLabel || "Custom location set"
-                      : "No location set yet"}
+
+                <LocationPickerMap
+                  value={location}
+                  onChange={(newLocation) => {
+                    setLocation(newLocation);
+                    setLocationLabel("Selected location in Rabat");
+                  }}
+                />
+
+                <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-3">
+                  <span className="flex min-w-0 items-center text-sm">
+                    <MapPinIcon className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="truncate">
+                      {locationLabel || "Location selected"}
+                    </span>
                   </span>
+
                   <Button
                     type="button"
                     variant="link"
                     size="sm"
-                    className="h-auto p-0"
+                    className="h-auto p-0 shrink-0"
                     onClick={() => {
-                      if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                          (position) => {
-                            setLocation({
-                              lat: position.coords.latitude,
-                              lng: position.coords.longitude,
-                            });
-                            setLocationLabel("Your current location");
-                          },
-                          () => {
-                            toast({
-                              title: "Location Error",
-                              description:
-                                "Couldn't access your current location. Try typing an address above instead.",
-                              variant: "destructive",
-                            });
-                          }
-                        );
+                      if (!navigator.geolocation) {
+                        toast({
+                          title: "Location Not Available",
+                          description:
+                            "Your browser does not support location services.",
+                          variant: "destructive",
+                        });
+                        return;
                       }
+
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          const newLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                          };
+
+                          setLocation(newLocation);
+                          setLocationLabel("Your current location");
+                        },
+                        () => {
+                          toast({
+                            title: "Location Error",
+                            description:
+                              "Couldn't access your current location. You can choose it directly on the map.",
+                            variant: "destructive",
+                          });
+                        }
+                      );
                     }}
                   >
                     Use my current location
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Tip: Kayena's pharmacies are currently all in Rabat — search
-                  "Rabat, Morocco" above to test regardless of where you
-                  actually are.
-                </p>
+
+                {location && (
+                  <p className="text-xs text-muted-foreground">
+                    Selected coordinates: {location.lat.toFixed(6)},{" "}
+                    {location.lng.toFixed(6)}
+                  </p>
+                )}
+
+                {/* Keep address search available as an optional shortcut. */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Or search an address
+                  </label>
+                  <div className="relative">
+                    <MapPinIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Type a city or address in Rabat..."
+                      value={addressInput}
+                      onChange={(e) => setAddressInput(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {geocoding && (
+                    <p className="text-xs text-muted-foreground">
+                      Searching...
+                    </p>
+                  )}
+
+                  {addressResults.length > 0 && (
+                    <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                      {addressResults.map((result, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => chooseAddress(result)}
+                          className="p-2 text-sm cursor-pointer hover:bg-muted"
+                        >
+                          {result.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Search Settings */}
@@ -508,7 +538,7 @@ export default function MedicationAlertSearch() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClockIcon className="h-5 w-5" />
-                Waiting for Pharmacy Responses
+                Waiting for pharmacy responses 
               </CardTitle>
               <CardDescription>
                 Time remaining: {formatTime(timeRemaining)}
@@ -631,3 +661,4 @@ export default function MedicationAlertSearch() {
     </div>
   );
 }
+ 

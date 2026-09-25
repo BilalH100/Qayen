@@ -36,6 +36,32 @@ func (q *Queries) CreateStock(ctx context.Context, arg CreateStockParams) (Stock
 	return i, err
 }
 
+const decrementStockQuantity = `-- name: DecrementStockQuantity :one
+UPDATE stock
+SET quantity = quantity - $3, updated_at = now()
+WHERE pharmacy_id = $1 AND medication_id = $2 AND quantity >= $3
+RETURNING id, pharmacy_id, medication_id, quantity, updated_at
+`
+
+type DecrementStockQuantityParams struct {
+	PharmacyID   pgtype.Int4
+	MedicationID pgtype.Int4
+	Quantity     int32
+}
+
+func (q *Queries) DecrementStockQuantity(ctx context.Context, arg DecrementStockQuantityParams) (Stock, error) {
+	row := q.db.QueryRow(ctx, decrementStockQuantity, arg.PharmacyID, arg.MedicationID, arg.Quantity)
+	var i Stock
+	err := row.Scan(
+		&i.ID,
+		&i.PharmacyID,
+		&i.MedicationID,
+		&i.Quantity,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteStockEntry = `-- name: DeleteStockEntry :exec
 DELETE FROM stock WHERE pharmacy_id = $1 AND medication_id = $2
 `

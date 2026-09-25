@@ -49,25 +49,43 @@ type PharmacistResponseRequest struct {
 
 // AlertResult represents the final result returned to customer
 type AlertResult struct {
-	AlertID    int32                  `json:"alert_id"`
-	Status     string                 `json:"status"`
-	Pharmacies []PharmacyAvailability `json:"pharmacies"`
-	CreatedAt  time.Time              `json:"created_at"`
-	ExpiresAt  time.Time              `json:"expires_at"`
+	AlertID      int32                  `json:"alert_id"`
+	MedicationID int32                  `json:"medication_id"`
+	Status       string                 `json:"status"`
+	Pharmacies   []PharmacyAvailability `json:"pharmacies"`
+	CreatedAt    time.Time              `json:"created_at"`
+	ExpiresAt    time.Time              `json:"expires_at"`
 }
 
 type PharmacyAvailability struct {
-	PharmacyID      int32   `json:"pharmacy_id"`
-	PharmacyName    string  `json:"pharmacy_name"`
-	PharmacyAddress string  `json:"pharmacy_address"`
-	PharmacyPhone   string  `json:"pharmacy_phone"`
-	Latitude        float64 `json:"latitude"`
-	Longitude       float64 `json:"longitude"`
-	DistanceKM      float64 `json:"distance_km"`
-	ResponseType    string  `json:"response_type"`
-	SubstituteBrand string  `json:"substitute_brand,omitempty"`
-	SubstituteNotes string  `json:"substitute_notes,omitempty"`
-	ResponseTime    int32   `json:"response_time_seconds"`
+	PharmacyID        int32   `json:"pharmacy_id"`
+	PharmacyName      string  `json:"pharmacy_name"`
+	PharmacyAddress   string  `json:"pharmacy_address"`
+	PharmacyPhone     string  `json:"pharmacy_phone"`
+	Latitude          float64 `json:"latitude"`
+	Longitude         float64 `json:"longitude"`
+	DistanceKM        float64 `json:"distance_km"`
+	ResponseType      string  `json:"response_type"`
+	SubstituteBrand   string  `json:"substitute_brand,omitempty"`
+	SubstituteNotes   string  `json:"substitute_notes,omitempty"`
+	ResponseTime      int32   `json:"response_time_seconds"`
+	AvailableQuantity int32   `json:"available_quantity"`
+}
+
+// ConfirmPickupRequest represents a patient confirming they're taking a
+// given quantity of the medication from a pharmacy that responded "available".
+type ConfirmPickupRequest struct {
+	AlertID    int32 `json:"alert_id"`
+	PharmacyID int32 `json:"pharmacy_id"`
+	Quantity   int32 `json:"quantity"`
+}
+
+// ConfirmPickupResult is returned after a successful confirmation.
+type ConfirmPickupResult struct {
+	AlertID        int32 `json:"alert_id"`
+	PharmacyID     int32 `json:"pharmacy_id"`
+	QuantityTaken  int32 `json:"quantity_taken"`
+	RemainingStock int32 `json:"remaining_stock"`
 }
 
 // Custom error types for better error handling and tracing
@@ -369,11 +387,12 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 	log.Printf("Successfully created and processed alert %d - Notified %d pharmacies", alert.ID, notifiedCount)
 
 	result := &AlertResult{
-		AlertID:    updatedAlert.ID,
-		Status:     updatedAlert.Status,
-		CreatedAt:  updatedAlert.CreatedAt.Time,
-		ExpiresAt:  updatedAlert.ExpiresAt.Time,
-		Pharmacies: []PharmacyAvailability{}, // Will be populated as responses come in
+		AlertID:      updatedAlert.ID,
+		MedicationID: updatedAlert.MedicationID.Int32,
+		Status:       updatedAlert.Status,
+		CreatedAt:    updatedAlert.CreatedAt.Time,
+		ExpiresAt:    updatedAlert.ExpiresAt.Time,
+		Pharmacies:   []PharmacyAvailability{}, // Will be populated as responses come in
 	}
 
 	return result, nil
@@ -527,6 +546,124 @@ func (s *AlertService) SubmitPharmacistResponse(ctx context.Context, req Pharmac
 	return nil
 }
 
+// ConfirmPickup is called when a patient confirms they're taking a given
+// quantity of medication from a pharmacy that responded "available". It
+// atomically decrements that pharmacy's stock and marks the alert
+// completed, so other pharmacies stop treating it as still pending.
+func (s *AlertService) ConfirmPickup(ctx context.Context, req ConfirmPickupRequest) (*ConfirmPickupResult, error) {
+	const operation = "ConfirmPickup"
+
+	if req.AlertID <= 0 {
+		err := NewValidationError(operation, "Invalid alert ID", fmt.Sprintf("AlertID: %d", req.AlertID))
+		s.logError(ctx, err)
+		return nil, err
+	}
+
+	if req.PharmacyID <= 0 {
+		err := NewValidationError(operation, "Invalid pharmacy ID", fmt.Sprintf("PharmacyID: %d", req.PharmacyID))
+		s.logError(ctx, err)
+		return nil, err
+	}
+
+	if req.Quantity <= 0 {
+		err := NewValidationError(operation, "Quantity must be greater than zero", fmt.Sprintf("Quantity: %d", req.Quantity))
+		s.logError(ctx, err)
+		return nil, err
+	}
+
+	log.Printf("Processing pickup confirmation - AlertID: %d, PharmacyID: %d, Quantity: %d",
+		req.AlertID, req.PharmacyID, req.Quantity)
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		dbErr := NewDatabaseError(operation, "Failed to begin transaction", err)
+		s.logError(ctx, dbErr)
+		return nil, dbErr
+	}
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+			rollbackErr := NewDatabaseError(operation, "Failed to rollback transaction", err)
+			s.logError(ctx, rollbackErr)
+		}
+	}()
+
+	qtx := s.queries.WithTx(tx)
+
+	// Verify the alert exists and is still pending, and get its medication_id
+	// (we never trust a medication_id from the client for this decrement).
+	alert, err := qtx.GetMedicationAlert(ctx, req.AlertID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			notFoundErr := NewNotFoundError(operation, "Alert not found")
+			s.logError(ctx, notFoundErr, "AlertID", req.AlertID)
+			return nil, notFoundErr
+		}
+		dbErr := NewDatabaseError(operation, "Failed to fetch alert", err)
+		s.logError(ctx, dbErr, "AlertID", req.AlertID)
+		return nil, dbErr
+	}
+
+	if alert.Status != "pending" {
+		businessErr := NewBusinessLogicError(operation, "Alert is no longer active",
+			fmt.Sprintf("Current status: %s", alert.Status))
+		s.logError(ctx, businessErr, "AlertID", req.AlertID, "Status", alert.Status)
+		return nil, businessErr
+	}
+
+	// Atomic decrement: fails (no row) if there isn't enough stock.
+	stock, err := qtx.DecrementStockQuantity(ctx, sqlc.DecrementStockQuantityParams{
+		PharmacyID:   pgtype.Int4{Int32: req.PharmacyID, Valid: true},
+		MedicationID: alert.MedicationID,
+		Quantity:     req.Quantity,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			businessErr := NewBusinessLogicError(operation, "Not enough stock to fulfill this quantity", "")
+			s.logError(ctx, businessErr, "AlertID", req.AlertID, "PharmacyID", req.PharmacyID, "Quantity", req.Quantity)
+			return nil, businessErr
+		}
+		dbErr := NewDatabaseError(operation, "Failed to decrement stock", err)
+		s.logError(ctx, dbErr, "AlertID", req.AlertID, "PharmacyID", req.PharmacyID)
+		return nil, dbErr
+	}
+
+	// Mark the alert completed, guarded so a race with expiry/another
+	// confirmation is caught instead of silently overwritten.
+	if _, err := qtx.CompleteMedicationAlert(ctx, req.AlertID); err != nil {
+		if err == pgx.ErrNoRows {
+			businessErr := NewBusinessLogicError(operation, "Alert was already resolved", "")
+			s.logError(ctx, businessErr, "AlertID", req.AlertID)
+			return nil, businessErr
+		}
+		dbErr := NewDatabaseError(operation, "Failed to complete alert", err)
+		s.logError(ctx, dbErr, "AlertID", req.AlertID)
+		return nil, dbErr
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		dbErr := NewDatabaseError(operation, "Failed to commit transaction", err)
+		s.logError(ctx, dbErr, "AlertID", req.AlertID)
+		return nil, dbErr
+	}
+
+	log.Printf("Pickup confirmed - AlertID: %d, PharmacyID: %d, Quantity: %d, RemainingStock: %d",
+		req.AlertID, req.PharmacyID, req.Quantity, stock.Quantity)
+
+	// Let the customer's other open tabs (if any) know the alert is resolved.
+	notifyErr := s.notifyCustomerOfResponse(ctx, alert.CustomerID.Int32, req.AlertID)
+	if notifyErr != nil {
+		internalErr := NewInternalError(operation, "Failed to notify customer (non-critical)", notifyErr)
+		s.logError(ctx, internalErr, "CustomerID", alert.CustomerID.Int32, "AlertID", req.AlertID)
+	}
+
+	return &ConfirmPickupResult{
+		AlertID:        req.AlertID,
+		PharmacyID:     req.PharmacyID,
+		QuantityTaken:  req.Quantity,
+		RemainingStock: stock.Quantity,
+	}, nil
+}
+
 // GetAlertResults retrieves all current responses for an alert
 func (s *AlertService) GetAlertResults(ctx context.Context, alertID int32, customerLat, customerLng float64) (*AlertResult, error) {
 	const operation = "GetAlertResults"
@@ -583,26 +720,28 @@ func (s *AlertService) GetAlertResults(ctx context.Context, alertID int32, custo
 	pharmacies := make([]PharmacyAvailability, len(responses))
 	for i, resp := range responses {
 		pharmacies[i] = PharmacyAvailability{
-			PharmacyID:      resp.PharmacyID.Int32,
-			PharmacyName:    resp.PharmacyName,
-			PharmacyAddress: resp.PharmacyAddress,
-			PharmacyPhone:   resp.PharmacyPhone,
-			Latitude:        resp.PharmacyLatitude.Float64,
-			Longitude:       resp.PharmacyLongitude.Float64,
-			DistanceKM:      float64(resp.DistanceKm),
-			ResponseType:    resp.ResponseType,
-			SubstituteBrand: resp.SubstituteBrand.String,
-			SubstituteNotes: resp.SubstituteNotes.String,
-			ResponseTime:    resp.ResponseTimeSeconds.Int32,
+			PharmacyID:        resp.PharmacyID.Int32,
+			PharmacyName:      resp.PharmacyName,
+			PharmacyAddress:   resp.PharmacyAddress,
+			PharmacyPhone:     resp.PharmacyPhone,
+			Latitude:          resp.PharmacyLatitude.Float64,
+			Longitude:         resp.PharmacyLongitude.Float64,
+			DistanceKM:        float64(resp.DistanceKm),
+			ResponseType:      resp.ResponseType,
+			SubstituteBrand:   resp.SubstituteBrand.String,
+			SubstituteNotes:   resp.SubstituteNotes.String,
+			ResponseTime:      resp.ResponseTimeSeconds.Int32,
+			AvailableQuantity: resp.AvailableQuantity.Int32, // 0 when no stock row exists
 		}
 	}
 
 	result := &AlertResult{
-		AlertID:    alert.ID,
-		Status:     alert.Status,
-		Pharmacies: pharmacies,
-		CreatedAt:  alert.CreatedAt.Time,
-		ExpiresAt:  alert.ExpiresAt.Time,
+		AlertID:      alert.ID,
+		MedicationID: alert.MedicationID.Int32,
+		Status:       alert.Status,
+		Pharmacies:   pharmacies,
+		CreatedAt:    alert.CreatedAt.Time,
+		ExpiresAt:    alert.ExpiresAt.Time,
 	}
 
 	log.Printf("Successfully retrieved alert results - AlertID: %d, Responses: %d", alertID, len(pharmacies))

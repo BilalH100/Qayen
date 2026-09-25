@@ -200,6 +200,33 @@ func (q *Queries) CreatePharmacyAlertNotification(ctx context.Context, arg Creat
 	return i, err
 }
 
+const completeMedicationAlert = `-- name: CompleteMedicationAlert :one
+UPDATE medication_alerts 
+SET status = 'completed'
+WHERE id = $1 AND status = 'pending'
+RETURNING id, customer_id, medication_id, customer_latitude, customer_longitude, search_radius_km, max_response_time_minutes, status, created_at, expires_at, total_pharmacies_notified, total_responses_received
+`
+
+func (q *Queries) CompleteMedicationAlert(ctx context.Context, id int32) (MedicationAlert, error) {
+	row := q.db.QueryRow(ctx, completeMedicationAlert, id)
+	var i MedicationAlert
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.MedicationID,
+		&i.CustomerLatitude,
+		&i.CustomerLongitude,
+		&i.SearchRadiusKm,
+		&i.MaxResponseTimeMinutes,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.TotalPharmaciesNotified,
+		&i.TotalResponsesReceived,
+	)
+	return i, err
+}
+
 const expireMedicationAlert = `-- name: ExpireMedicationAlert :exec
 UPDATE medication_alerts 
 SET status = 'expired'
@@ -493,6 +520,7 @@ SELECT
   p.latitude as pharmacy_latitude,
   p.longitude as pharmacy_longitude,
   m.speciality as substitute_medication_name,
+  st.quantity as available_quantity,
   (
     6371 * acos(
       cos(radians($2)) *
@@ -504,10 +532,11 @@ SELECT
   ) AS distance_km
 FROM pharmacist_responses pr
 JOIN pharmacies p ON p.id = pr.pharmacy_id
+JOIN medication_alerts ma ON ma.id = pr.alert_id
 LEFT JOIN medications m ON m.id = pr.substitute_medication_id
+LEFT JOIN stock st ON st.pharmacy_id = pr.pharmacy_id AND st.medication_id = ma.medication_id
 WHERE pr.alert_id = $1 
   AND pr.expires_at > now()
-  AND pr.response_type IN ('available', 'substitute')
 ORDER BY distance_km ASC
 `
 
@@ -534,6 +563,7 @@ type GetPharmacistResponsesForAlertRow struct {
 	PharmacyLatitude         pgtype.Float8
 	PharmacyLongitude        pgtype.Float8
 	SubstituteMedicationName pgtype.Text
+	AvailableQuantity        pgtype.Int4
 	DistanceKm               float64
 }
 
@@ -563,6 +593,7 @@ func (q *Queries) GetPharmacistResponsesForAlert(ctx context.Context, arg GetPha
 			&i.PharmacyLatitude,
 			&i.PharmacyLongitude,
 			&i.SubstituteMedicationName,
+			&i.AvailableQuantity,
 			&i.DistanceKm,
 		); err != nil {
 			return nil, err
