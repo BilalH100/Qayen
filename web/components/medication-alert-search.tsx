@@ -10,7 +10,6 @@ import { SearchIcon, MapPinIcon, ClockIcon, PhoneIcon, CheckIcon, AlertTriangleI
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { BASE_URL } from "@/utils/api";
-import LocationPickerMap from "@/components/location-picker-map";
 
 interface Medication {
   id: number;
@@ -32,6 +31,7 @@ interface PharmacyAvailability {
   substitute_brand?: string;
   substitute_notes?: string;
   response_time_seconds: number;
+  available_quantity: number;
 }
 
 interface AlertResult {
@@ -58,11 +58,18 @@ export default function MedicationAlertSearch() {
   const [isSearching, setIsSearching] = useState(false);
   const [isWaiting, setIsWaiting] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [confirmingPharmacyId, setConfirmingPharmacyId] = useState<number | null>(null);
+  const [quantities, setQuantities] = useState<Record<number, number>>({});
   const { toast } = useToast();
   const { user } = useAuth();
   const eventSourceRef = useRef<EventSource | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultsPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // The alert the screen is currently showing. Late responses from an older
+  // alert are ignored so they can never overwrite a newer request.
+  const currentAlertIdRef = useRef<number | null>(null);
+  const [confirmedInfo, setConfirmedInfo] = useState<{ quantity: number; remaining: number } | null>(null);
 
   // Always close any open SSE connection when the component unmounts.
   useEffect(() => {
@@ -70,6 +77,7 @@ export default function MedicationAlertSearch() {
       eventSourceRef.current?.close();
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       if (autoCloseTimeoutRef.current) clearTimeout(autoCloseTimeoutRef.current);
+      if (resultsPollingRef.current) clearInterval(resultsPollingRef.current);
     };
   }, []);
 
@@ -86,21 +94,40 @@ export default function MedicationAlertSearch() {
       clearTimeout(autoCloseTimeoutRef.current);
       autoCloseTimeoutRef.current = null;
     }
+    if (resultsPollingRef.current) {
+      clearInterval(resultsPollingRef.current);
+      resultsPollingRef.current = null;
+    }
+    currentAlertIdRef.current = null;
     setAlertResult(null);
+    setConfirmedInfo(null);
     setSelectedMedication(null);
     setSearchTerm("");
     setIsWaiting(false);
     setTimeRemaining(0);
+    setConfirmingPharmacyId(null);
+    setQuantities({});
   };
 
-  // Start in Rabat so the map is immediately usable.
-  // The user can click anywhere or drag the pin to choose the
-  // exact location that will be sent to the backend.
+  // Try to get the user's real browser location as a starting point.
+  // This is only a convenience default — since Kayena's seeded pharmacies
+  // are currently all in Rabat, use the address search below to test
+  // from anywhere else.
   useEffect(() => {
-    setLocation((current) =>
-      current ?? { lat: 34.0209, lng: -6.8416 },
-    );
-    setLocationLabel((current) => current || "Rabat, Morocco");
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          setLocationLabel("Your current location");
+        },
+        () => {
+          // Silently ignore — the address search below covers this case.
+        }
+      );
+    }
   }, []);
 
   // Debounced address -> coordinates lookup (OpenStreetMap Nominatim, free, no API key)
@@ -181,8 +208,18 @@ export default function MedicationAlertSearch() {
     }
 
     setIsSearching(true);
-    // Close any previous connection before starting a new alert.
+    // Fully stop the previous request (SSE, countdown, polling, timeout) so
+    // a new request can start right away without a page refresh.
     eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null; }
+    if (resultsPollingRef.current) { clearInterval(resultsPollingRef.current); resultsPollingRef.current = null; }
+    if (autoCloseTimeoutRef.current) { clearTimeout(autoCloseTimeoutRef.current); autoCloseTimeoutRef.current = null; }
+    currentAlertIdRef.current = null;
+    setAlertResult(null);
+    setConfirmedInfo(null);
+    setQuantities({});
+    setConfirmingPharmacyId(null);
 
     try {
       const response = await fetch(`${BASE_URL}/alerts`, {
@@ -202,7 +239,16 @@ export default function MedicationAlertSearch() {
 
       const data = await response.json();
       
+      if (!response.ok || !data.success) {
+        const msg =
+          (data?.error && typeof data.error === "object"
+            ? [data.error.message, data.error.details].filter(Boolean).join(" — ")
+            : data?.error) || data?.message || "Failed to create alert";
+        throw new Error(msg);
+      }
+
       if (data.success) {
+        currentAlertIdRef.current = data.data.alert_id;
         setAlertResult(data.data);
         setIsWaiting(true);
         setTimeRemaining(2 * 60); // 2 minutes in seconds
@@ -234,6 +280,20 @@ export default function MedicationAlertSearch() {
 
         eventSource.onmessage = (event) => {
           const updateData = JSON.parse(event.data);
+          if (updateData.type === "alert_completed") {
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+              countdownIntervalRef.current = null;
+            }
+            setIsWaiting(false);
+            eventSource.close();
+            toast({
+              title: "Medication confirmed",
+              description: "Your medication request has been completed and the stock was reserved.",
+            });
+            return;
+          }
+
           if (updateData.type === "new_response") {
             // A pharmacist just responded (available, substitute, or not
             // available) — stop the "waiting" countdown right away instead
@@ -277,23 +337,44 @@ export default function MedicationAlertSearch() {
           }
         };
 
-        // Clean up event source when component unmounts or search completes
+        // Backup polling: refresh the current alert results automatically every 2 seconds.
+        // SSE is still used for instant updates, but polling guarantees that the patient
+        // sees a pharmacist response even if the SSE event is missed. The 2-minute timer
+        // remains unchanged.
+        if (resultsPollingRef.current) {
+          clearInterval(resultsPollingRef.current);
+        }
+
+        resultsPollingRef.current = setInterval(async () => {
+          const pharmacies = await fetchAlertResults(data.data.alert_id);
+
+          // Keep the existing 2-minute request timer running. Polling only
+          // refreshes the results so the patient sees stock/quantity changes
+          // without refreshing the page.
+          void pharmacies;
+        }, 2000);
+
+        // Clean up event source when the 2-minute request window ends.
         autoCloseTimeoutRef.current = setTimeout(() => {
           eventSource.close();
+          eventSourceRef.current = null;
+
+          if (resultsPollingRef.current) {
+            clearInterval(resultsPollingRef.current);
+            resultsPollingRef.current = null;
+          }
         }, 2 * 60 * 1000); // 2 minutes
 
         toast({
           title: "Alert Sent",
           description: `Notifying nearby pharmacies about ${selectedMedication.speciality}`,
         });
-      } else {
-        throw new Error(data.error || "Failed to create alert");
       }
     } catch (error) {
       console.error("Failed to create alert:", error);
       toast({
         title: "Error",
-        description: "Failed to send alert to pharmacies",
+        description: error instanceof Error ? error.message : "Failed to send alert to pharmacies",
         variant: "destructive",
       });
     } finally {
@@ -307,10 +388,12 @@ export default function MedicationAlertSearch() {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/alerts/${alertId}/results?lat=${location.lat}&lng=${location.lng}`
+        `${BASE_URL}/alerts/${alertId}/results?lat=${location.lat}&lng=${location.lng}&_ts=${Date.now()}`,
+        { cache: "no-store" }
       );
       const data = await response.json();
       
+      if (currentAlertIdRef.current !== alertId) return undefined; // stale
       if (data.success) {
         setAlertResult(data.data);
         return data.data.pharmacies as PharmacyAvailability[];
@@ -319,6 +402,94 @@ export default function MedicationAlertSearch() {
       console.error("Failed to fetch alert results:", error);
     }
     return undefined;
+  };
+
+  const confirmMedication = async (pharmacy: PharmacyAvailability) => {
+    const quantity = quantities[pharmacy.pharmacy_id] || 1;
+
+    if (pharmacy.available_quantity <= 0) {
+      toast({
+        title: "No stock available",
+        description: "This pharmacy no longer has this medication in stock.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (quantity < 1 || quantity > pharmacy.available_quantity) {
+      toast({
+        title: "Invalid quantity",
+        description: `Please choose between 1 and ${pharmacy.available_quantity}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!user?.id || !alertResult?.alert_id) {
+      toast({
+        title: "Unable to confirm",
+        description: "You must be signed in to confirm this medication.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setConfirmingPharmacyId(pharmacy.pharmacy_id);
+
+    try {
+      const response = await fetch(`${BASE_URL}/alerts/${alertResult.alert_id}/confirm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customer_id: user.id,
+          pharmacy_id: pharmacy.pharmacy_id,
+          quantity,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Failed to confirm medication");
+      }
+
+      currentAlertIdRef.current = null;
+      setAlertResult(null);
+      setSelectedMedication(null);
+      setSearchTerm("");
+      setMedications([]);
+      setQuantities({});
+      setConfirmedInfo({ quantity, remaining: data.data.remaining_stock });
+      setIsWaiting(false);
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+
+      if (resultsPollingRef.current) {
+        clearInterval(resultsPollingRef.current);
+        resultsPollingRef.current = null;
+      }
+
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+
+      toast({
+        title: "Confirm & take successful",
+        description: `${quantity} item${quantity === 1 ? "" : "s"} reserved. Remaining pharmacy stock: ${data.data.remaining_stock}.`,
+      });
+    } catch (error) {
+      console.error("Failed to confirm medication:", error);
+      toast({
+        title: "Confirmation failed",
+        description: error instanceof Error ? error.message : "Could not confirm the medication.",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmingPharmacyId(null);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -349,7 +520,7 @@ export default function MedicationAlertSearch() {
         </div>
 
         {/* Search Interface */}
-        {!alertResult && (
+        {!isWaiting && (
           <Card>
             <CardHeader>
               <CardTitle>Search for Medication</CardTitle>
@@ -394,115 +565,75 @@ export default function MedicationAlertSearch() {
               )}
 
               {/* Location */}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">
-                    Patient location
-                  </label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Choose the patient's location on the Rabat map.
-                  </p>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Search location</label>
+                <div className="relative">
+                  <MapPinIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Type a city or address (e.g. Rabat, Morocco)..."
+                    value={addressInput}
+                    onChange={(e) => setAddressInput(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-
-                <LocationPickerMap
-                  value={location}
-                  onChange={(newLocation) => {
-                    setLocation(newLocation);
-                    setLocationLabel("Selected location in Rabat");
-                  }}
-                />
-
-                <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-3">
-                  <span className="flex min-w-0 items-center text-sm">
-                    <MapPinIcon className="h-4 w-4 mr-2 shrink-0" />
-                    <span className="truncate">
-                      {locationLabel || "Location selected"}
-                    </span>
+                {geocoding && (
+                  <p className="text-xs text-muted-foreground">Searching...</p>
+                )}
+                {addressResults.length > 0 && (
+                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                    {addressResults.map((result, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => chooseAddress(result)}
+                        className="p-2 text-sm cursor-pointer hover:bg-muted"
+                      >
+                        {result.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span className="flex items-center">
+                    <MapPinIcon className="h-4 w-4 mr-1" />
+                    {location
+                      ? locationLabel || "Custom location set"
+                      : "No location set yet"}
                   </span>
-
                   <Button
                     type="button"
                     variant="link"
                     size="sm"
-                    className="h-auto p-0 shrink-0"
+                    className="h-auto p-0"
                     onClick={() => {
-                      if (!navigator.geolocation) {
-                        toast({
-                          title: "Location Not Available",
-                          description:
-                            "Your browser does not support location services.",
-                          variant: "destructive",
-                        });
-                        return;
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            setLocation({
+                              lat: position.coords.latitude,
+                              lng: position.coords.longitude,
+                            });
+                            setLocationLabel("Your current location");
+                          },
+                          () => {
+                            toast({
+                              title: "Location Error",
+                              description:
+                                "Couldn't access your current location. Try typing an address above instead.",
+                              variant: "destructive",
+                            });
+                          }
+                        );
                       }
-
-                      navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                          const newLocation = {
-                            lat: position.coords.latitude,
-                            lng: position.coords.longitude,
-                          };
-
-                          setLocation(newLocation);
-                          setLocationLabel("Your current location");
-                        },
-                        () => {
-                          toast({
-                            title: "Location Error",
-                            description:
-                              "Couldn't access your current location. You can choose it directly on the map.",
-                            variant: "destructive",
-                          });
-                        }
-                      );
                     }}
                   >
                     Use my current location
                   </Button>
                 </div>
-
-                {location && (
-                  <p className="text-xs text-muted-foreground">
-                    Selected coordinates: {location.lat.toFixed(6)},{" "}
-                    {location.lng.toFixed(6)}
-                  </p>
-                )}
-
-                {/* Keep address search available as an optional shortcut. */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Or search an address
-                  </label>
-                  <div className="relative">
-                    <MapPinIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Type a city or address in Rabat..."
-                      value={addressInput}
-                      onChange={(e) => setAddressInput(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-
-                  {geocoding && (
-                    <p className="text-xs text-muted-foreground">
-                      Searching...
-                    </p>
-                  )}
-
-                  {addressResults.length > 0 && (
-                    <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-                      {addressResults.map((result, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => chooseAddress(result)}
-                          className="p-2 text-sm cursor-pointer hover:bg-muted"
-                        >
-                          {result.label}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Tip: Kayena's pharmacies are currently all in Rabat — search
+                  "Rabat, Morocco" above to test regardless of where you
+                  actually are.
+                </p>
               </div>
 
               {/* Search Settings */}
@@ -538,7 +669,7 @@ export default function MedicationAlertSearch() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClockIcon className="h-5 w-5" />
-                Waiting for pharmacy responses 
+                Waiting for Pharmacy Responses
               </CardTitle>
               <CardDescription>
                 Time remaining: {formatTime(timeRemaining)}
@@ -554,6 +685,14 @@ export default function MedicationAlertSearch() {
               </Alert>
             </CardContent>
           </Card>
+        )}
+
+        {confirmedInfo && (
+          <Alert>
+            <AlertDescription>
+              <strong>Pickup confirmed.</strong> {confirmedInfo.quantity} reserved (remaining stock: {confirmedInfo.remaining}). You can send a new request below.
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Results */}
@@ -592,14 +731,50 @@ export default function MedicationAlertSearch() {
                           </p>
                         )}
                       </div>
-                      <div className="text-right space-y-1">
+                      <div className="text-right space-y-2 min-w-[220px]">
                         <div className="text-sm text-muted-foreground">
                           Responded in {pharmacy.response_time_seconds}s
                         </div>
-                        <Button size="sm" className="flex items-center gap-1">
+                        <Button size="sm" className="flex items-center gap-1 ml-auto">
                           <PhoneIcon className="h-3 w-3" />
                           {pharmacy.pharmacy_phone}
                         </Button>
+
+                        {pharmacy.response_type === "available" && (
+                          <div className="space-y-2 pt-1 text-left">
+                            <div className="text-xs text-muted-foreground">
+                              In stock: <strong>{pharmacy.available_quantity ?? 0}</strong>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={pharmacy.available_quantity}
+                                value={quantities[pharmacy.pharmacy_id] || 1}
+                                onChange={(e) => {
+                                  const parsed = parseInt(e.target.value, 10);
+                                  const safeValue = Number.isFinite(parsed)
+                                    ? Math.min(Math.max(parsed, 1), Math.max(pharmacy.available_quantity, 1))
+                                    : 1;
+                                  setQuantities(prev => ({
+                                    ...prev,
+                                    [pharmacy.pharmacy_id]: safeValue,
+                                  }));
+                                }}
+                                className="w-20"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => confirmMedication(pharmacy)}
+                                disabled={confirmingPharmacyId !== null || alertResult.status !== "pending" || !(pharmacy.available_quantity > 0)}
+                                className="flex-1"
+                              >
+                                <CheckIcon className="h-3 w-3 mr-1" />
+                                {confirmingPharmacyId === pharmacy.pharmacy_id ? "Confirming..." : "Confirm & take"}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -661,4 +836,3 @@ export default function MedicationAlertSearch() {
     </div>
   );
 }
- 

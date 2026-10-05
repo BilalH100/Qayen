@@ -174,9 +174,7 @@ export function Navbar() {
             <span className="sr-only">Cart</span>
           </Button>
 
-          {isLoading ? (
-            <div className="w-8 h-8 animate-pulse bg-gray-200 rounded-full" />
-          ) : isAuthenticated ? (
+          {isAuthenticated ? (
             <UserMenu />
           ) : (
             <>

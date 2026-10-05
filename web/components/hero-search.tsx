@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { BASE_URL } from "@/utils/api";
+import dynamic from "next/dynamic";
+
+const LocationMapPicker = dynamic(
+  () => import("./location-picker-map").then((mod) => mod.LocationMapPicker),
+  { ssr: false }
+);
+
 import {
   Dialog,
   DialogContent,
@@ -28,6 +35,7 @@ import {
 } from "@/components/ui/command";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
@@ -77,7 +85,12 @@ export function HeroSearch() {
   const [alertResult, setAlertResult] = useState<AlertResult | null>(null);
   const [creatingAlert, setCreatingAlert] = useState(false);
   const [waitingForResponses, setWaitingForResponses] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes
+  const ATTEMPT_SECONDS = 30; // time each pharmacy gets before we try the next one
+  const [timeRemaining, setTimeRemaining] = useState(ATTEMPT_SECONDS);
+  // How many units the patient needs (only pharmacies with enough stock are alerted).
+  const [requestedQuantity, setRequestedQuantity] = useState("1");
+  const [statusNote, setStatusNote] = useState<string | null>(null);
+  const waitCapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Hardcoded coordinates for Rabat, Morocco
   const [userCoordinates, setUserCoordinates] = useState<{
     latitude: string;
@@ -108,12 +121,37 @@ export function HeroSearch() {
     };
   }, []);
 
-  // For testing - always use hardcoded coordinates for Rabat
   const getUserLocation = () => {
     setLocationError(null);
-    // We keep the coordinates we already have in state
-    // Just update the location display text
-    setLocation("Rabat, Morocco");
+
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude.toFixed(6);
+        const longitude = position.coords.longitude.toFixed(6);
+        setUserCoordinates({ latitude, longitude });
+        setLocation(`Current location (${latitude}, ${longitude})`);
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setLocationError(
+          "Could not get your current location. You can choose a location directly on the map."
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  const handleMapLocationPicked = (lat: number, lng: number) => {
+    const latitude = lat.toFixed(6);
+    const longitude = lng.toFixed(6);
+    setUserCoordinates({ latitude, longitude });
+    setLocation(`Selected location (${latitude}, ${longitude})`);
+    setLocationError(null);
   };
 
   // Search medications as user types
@@ -173,9 +211,22 @@ export function HeroSearch() {
     if (!selectedMedication || !isAuthenticated || !user) return;
 
     setCreatingAlert(true);
-    // Close any previous connection before starting a new alert.
+    // Fully reset everything from the previous request so the new one starts
+    // clean (this was why "Pickup confirmed" showed instead of the quantity
+    // selector on 2nd+ requests until the page was refreshed).
     eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
     seenPharmacyIdsRef.current = new Set();
+    setConfirmedPharmacyId(null);
+    setConfirmingPharmacyId(null);
+    setConfirmQuantities({});
+    setAlertResult(null);
+    setStatusNote(null);
+    if (waitCapTimeoutRef.current) clearTimeout(waitCapTimeoutRef.current);
     try {
       const response = await fetch(`${BASE_URL}/alerts`, {
         method: "POST",
@@ -189,6 +240,7 @@ export function HeroSearch() {
           longitude: parseFloat(userCoordinates.longitude),
           search_radius_km: 50,
           max_response_time_minutes: 2,
+          requested_quantity: Math.max(parseInt(requestedQuantity, 10) || 1, 1),
         }),
       });
 
@@ -203,9 +255,12 @@ export function HeroSearch() {
           created_at: new Date().toISOString(),
           expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(), // 2 minutes from now
         });
+        setConfirmQuantities({});
         setShowAlertDialog(true);
         setWaitingForResponses(true);
-        setTimeRemaining(120);
+        setTimeRemaining(ATTEMPT_SECONDS);
+        // Safety net in case the live connection drops: stop waiting after 5 min.
+        waitCapTimeoutRef.current = setTimeout(() => setWaitingForResponses(false), 5 * 60 * 1000);
         
         toast({
           title: "Alert Created",
@@ -222,7 +277,12 @@ export function HeroSearch() {
         const errorData = await response.json();
         toast({
           title: "Error Creating Alert",
-          description: errorData.message || "Failed to create alert. Please try again.",
+          description:
+            (errorData.error && typeof errorData.error === "object"
+              ? [errorData.error.message, errorData.error.details].filter(Boolean).join(" — ")
+              : errorData.error) ||
+            errorData.message ||
+            "Failed to create alert. Please try again.",
           variant: "destructive",
         });
       }
@@ -243,9 +303,8 @@ export function HeroSearch() {
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
-          countdownIntervalRef.current = null;
-          setWaitingForResponses(false);
+          // Just the per-pharmacy timer: the server decides when waiting ends
+          // (it moves to the next pharmacy and tells us over SSE).
           return 0;
         }
         return prev - 1;
@@ -285,7 +344,27 @@ export function HeroSearch() {
 
     eventSource.onmessage = async (event) => {
       console.log("[alert] SSE message received:", event.data);
+      if (eventSourceRef.current !== eventSource) return; // stale stream
       const updateData = JSON.parse(event.data);
+      if (updateData.type === "trying_next") {
+        setTimeRemaining(ATTEMPT_SECONDS);
+        setStatusNote("Previous pharmacy couldn't help — trying the next nearest pharmacy...");
+        return;
+      }
+      if (updateData.type === "exhausted") {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        setWaitingForResponses(false);
+        setStatusNote("No pharmacy with enough stock could help. Try a smaller quantity or try again later.");
+        toast({
+          title: "No pharmacy available",
+          description: "All nearby pharmacies with enough stock were tried.",
+          variant: "destructive",
+        });
+        return;
+      }
       if (updateData.type !== "new_response") return;
 
       const result = await fetchAlertResults(alertId);
@@ -298,13 +377,17 @@ export function HeroSearch() {
           : null,
       );
 
-      // A response is in — stop waiting right away instead of leaving the
-      // 2-minute box up until it times out.
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
+      // Only an "available" / "substitute" answer ends the wait. An
+      // "unavailable" one just means the server moves to the next pharmacy.
+      const hasOffer = pharmacies.some((p) => p.response_type !== "unavailable");
+      if (hasOffer) {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        setWaitingForResponses(false);
+        setStatusNote(null);
       }
-      setWaitingForResponses(false);
 
       const justArrived = pharmacies.filter(
         (p) => !seenPharmacyIdsRef.current.has(p.pharmacy_id),
@@ -345,7 +428,7 @@ export function HeroSearch() {
   const handleConfirmPickup = async (pharmacy: PharmacyResponse) => {
     if (!alertResult) return;
 
-    const rawQuantity = confirmQuantities[pharmacy.pharmacy_id] ?? "";
+    const rawQuantity = confirmQuantities[pharmacy.pharmacy_id] ?? String(Math.max(parseInt(requestedQuantity, 10) || 1, 1));
     const quantity = parseInt(rawQuantity, 10);
 
     if (!rawQuantity || isNaN(quantity) || quantity <= 0) {
@@ -559,8 +642,60 @@ export function HeroSearch() {
           </Button>
         </div>
 
+        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Choose your location on the map
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Click anywhere or drag the pin to set your location.
+              </p>
+            </div>
+            <MapPin className="h-5 w-5 shrink-0 text-teal-600" />
+          </div>
+
+          <LocationMapPicker
+            initialLat={parseFloat(userCoordinates.latitude)}
+            initialLng={parseFloat(userCoordinates.longitude)}
+            onLocationPicked={handleMapLocationPicked}
+          />
+
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            Selected: {userCoordinates.latitude}, {userCoordinates.longitude}
+          </p>
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-teal-700"
+            onClick={getUserLocation}
+          >
+            Use my current location instead
+          </Button>
+        </div>
+
         {locationError && (
           <p className="text-sm text-red-500">{locationError}</p>
+        )}
+
+        {searchType === "medication" && (
+          <div className="flex items-center gap-3">
+            <label htmlFor="requested-quantity" className="text-sm text-slate-600 dark:text-slate-300">
+              Quantity needed
+            </label>
+            <Input
+              id="requested-quantity"
+              type="number"
+              min={1}
+              className="h-10 w-24"
+              value={requestedQuantity}
+              onChange={(e) => setRequestedQuantity(e.target.value)}
+            />
+          </div>
         )}
 
         <Button
@@ -608,7 +743,7 @@ export function HeroSearch() {
                     <>
                       <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
                       <span className="text-sm text-slate-600 dark:text-slate-300">
-                        Waiting for pharmacy responses...
+                        {statusNote || "Waiting for the nearest pharmacy to respond..."}
                       </span>
                     </>
                   ) : alertResult.pharmacies.length > 0 ? (
@@ -622,7 +757,7 @@ export function HeroSearch() {
                     <>
                       <AlertTriangle className="h-4 w-4 text-amber-600" />
                       <span className="text-sm text-amber-600">
-                        No responses yet
+                        {statusNote || "No responses yet"}
                       </span>
                     </>
                   )}
@@ -640,7 +775,7 @@ export function HeroSearch() {
                 <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                   <div 
                     className="bg-teal-600 h-2 rounded-full transition-all duration-1000"
-                    style={{ width: `${((120 - timeRemaining) / 120) * 100}%` }}
+                    style={{ width: `${((ATTEMPT_SECONDS - timeRemaining) / ATTEMPT_SECONDS) * 100}%` }}
                   />
                 </div>
               )}
@@ -732,7 +867,7 @@ export function HeroSearch() {
                                   max={pharmacy.available_quantity > 0 ? pharmacy.available_quantity : undefined}
                                   placeholder="Qty"
                                   className="h-8 w-20"
-                                  value={confirmQuantities[pharmacy.pharmacy_id] ?? ""}
+                                  value={confirmQuantities[pharmacy.pharmacy_id] ?? String(pharmacy.available_quantity > 0 ? Math.min(Math.max(parseInt(requestedQuantity, 10) || 1, 1), pharmacy.available_quantity) : (parseInt(requestedQuantity, 10) || 1))}
                                   onChange={(e) =>
                                     setConfirmQuantities((prev) => ({
                                       ...prev,

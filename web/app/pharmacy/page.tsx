@@ -104,10 +104,20 @@ export default function PharmacistDashboard() {
   }, [isAuthenticated, isLoading, user]);
 
   useEffect(() => {
-    if (pharmacy) {
-      fetchAlerts();
-      fetchStock();
-    }
+    if (!pharmacy) return;
+
+    // Load the latest data immediately when the pharmacy changes.
+    fetchAlerts(true);
+    fetchStock(true);
+
+    // Keep the dashboard synchronized while another user/session changes
+    // the pharmacy data. This removes the need to manually refresh the page.
+    const interval = window.setInterval(() => {
+      fetchAlerts(false);
+      fetchStock(false);
+    }, 2000);
+
+    return () => window.clearInterval(interval);
   }, [pharmacy]);
 
   useEffect(() => {
@@ -135,12 +145,13 @@ export default function PharmacistDashboard() {
     }
   };
 
-  const fetchStock = async () => {
+  const fetchStock = async (showLoader = false) => {
     if (!pharmacy) return;
-    setStockLoading(true);
+    if (showLoader) setStockLoading(true);
     try {
       const response = await fetch(
         `${BASE_URL}/pharmacies/id/${pharmacy.id}/stock`,
+        { cache: "no-store" },
       );
       if (response.ok) {
         const data = await response.json();
@@ -149,7 +160,7 @@ export default function PharmacistDashboard() {
     } catch (error) {
       console.error("Error fetching stock:", error);
     } finally {
-      setStockLoading(false);
+      if (showLoader) setStockLoading(false);
     }
   };
 
@@ -179,7 +190,7 @@ export default function PharmacistDashboard() {
         setStockSearchTerm("");
         setStockSearchResults([]);
         setStockQuantity("10");
-        fetchStock();
+        fetchStock(false);
       } else {
         throw new Error("Failed to add stock");
       }
@@ -247,11 +258,13 @@ export default function PharmacistDashboard() {
     }
   }, [pharmacy]);
 
-  const fetchAlerts = async () => {
-    setAlertsLoading(true);
+  const fetchAlerts = async (showLoader = false) => {
+    if (!pharmacy) return;
+    if (showLoader) setAlertsLoading(true);
     try {
       const response = await fetch(
-        `${BASE_URL}/pharmacy/${pharmacy?.id}/dashboard`,
+        `${BASE_URL}/pharmacy/${pharmacy.id}/dashboard`,
+        { cache: "no-store" },
       );
       if (response.ok) {
         const data = await response.json();
@@ -260,7 +273,7 @@ export default function PharmacistDashboard() {
     } catch (error) {
       console.error("Error fetching alerts:", error);
     } finally {
-      setAlertsLoading(false);
+      if (showLoader) setAlertsLoading(false);
     }
   };
 

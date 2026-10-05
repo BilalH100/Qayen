@@ -17,6 +17,7 @@ interface MedicationAlert {
   created_at: string;
   expires_at: string;
   already_responded: boolean;
+  requested_quantity: number;
 }
 
 interface PharmacyStats {
@@ -227,6 +228,9 @@ export default function PharmacistDashboard({ params }: { params: { id: string }
                       </p>
                       <p className="text-sm">
                         Customer: {alert.customer_name} • {alert.customer_distance_km.toFixed(1)}km away
+                      </p>
+                      <p className="text-sm font-medium text-teal-700">
+                        Quantity needed: {alert.requested_quantity ?? 1}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
