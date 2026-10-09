@@ -271,8 +271,10 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 		return nil, dbErr
 	}
 
-	// Alert ONLY the nearest pharmacy that has enough stock. If it says
-	// "unavailable" or doesn't answer in time, advanceAlert moves to the next.
+	// Alert pharmacies one-by-one, starting with the nearest pharmacy that
+	// actually carries the medication. Quantity is checked when the pharmacy
+	// responds: a pharmacy with stock below the requested quantity is treated
+	// as unavailable and the alert advances to the next nearest pharmacy.
 	firstPharmacyID, found, err := s.notifyNextPharmacy(ctx, tx, alert.ID)
 	if err != nil {
 		dbErr := NewDatabaseError(operation, "Failed to find a nearby pharmacy", err)
@@ -281,8 +283,8 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 	}
 	if !found {
 		businessErr := NewBusinessLogicError(operation,
-			fmt.Sprintf("No nearby pharmacy has at least %d unit(s) of this medication in stock", req.RequestedQuantity),
-			fmt.Sprintf("Try a smaller quantity or a larger search radius (current: %.0f km)", req.SearchRadius))
+			"No nearby pharmacy has this medication in stock",
+			fmt.Sprintf("Try a different medication or a larger search radius (current: %.0f km)", req.SearchRadius))
 		s.logError(ctx, businessErr, "AlertID", alert.ID)
 		return nil, businessErr
 	}
@@ -292,7 +294,7 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 	updatedAlert, err := qtx.UpdateMedicationAlertStatus(ctx, sqlc.UpdateMedicationAlertStatusParams{
 		ID:                     alert.ID,
 		Status:                 "pending",
-		TotalResponsesReceived: pgtype.Int4{Int32: int32(notifiedCount), Valid: true},
+		TotalResponsesReceived: pgtype.Int4{Int32: 0, Valid: true},
 	})
 	if err != nil {
 		dbErr := NewDatabaseError(operation, "Failed to update alert status", err)
@@ -309,9 +311,10 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 
 	log.Printf("Successfully created and processed alert %d - Notified %d pharmacies", alert.ID, notifiedCount)
 
-	// Push to the first pharmacy only after the commit so its dashboard refetch sees the alert.
-	_ = s.sendNotificationToPharmacy(ctx, firstPharmacyID, alert.ID, req.MedicationID)
-	s.scheduleEscalation(alert.ID, firstPharmacyID)
+	// Dispatch only after commit. Pharmacies linked to a user account get the
+	// normal dashboard/SSE flow. Pharmacies without an account are evaluated
+	// automatically from their stock and can cause an immediate advance.
+	s.dispatchPharmacyAlert(ctx, firstPharmacyID, alert.ID, req.MedicationID)
 
 	result := &AlertResult{
 		AlertID:           updatedAlert.ID,
@@ -395,6 +398,62 @@ func (s *AlertService) SubmitPharmacistResponse(ctx context.Context, req Pharmac
 			fmt.Sprintf("Expired at: %s", alert.ExpiresAt.Time.Format(time.RFC3339)))
 		s.logError(ctx, businessErr, "AlertID", req.AlertID, "ExpiresAt", alert.ExpiresAt.Time)
 		return businessErr
+	}
+
+	// Only the pharmacy currently being tried may answer. This prevents a
+	// previously-notified pharmacy from answering after the alert has already
+	// moved on to another nearby pharmacy.
+	var isCurrentPharmacy bool
+	if err = tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pharmacy_alert_notifications n
+			WHERE n.alert_id = $1
+			  AND n.pharmacy_id = $2
+			  AND n.id = (
+				SELECT id
+				FROM pharmacy_alert_notifications
+				WHERE alert_id = $1
+				ORDER BY id DESC
+				LIMIT 1
+			  )
+		)`, req.AlertID, req.PharmacyID).Scan(&isCurrentPharmacy); err != nil {
+		dbErr := NewDatabaseError(operation, "Failed to validate pharmacy alert assignment", err)
+		s.logError(ctx, dbErr, "AlertID", req.AlertID, "PharmacyID", req.PharmacyID)
+		return dbErr
+	}
+	if !isCurrentPharmacy {
+		businessErr := NewBusinessLogicError(operation, "This pharmacy is not the current pharmacy being contacted")
+		s.logError(ctx, businessErr, "AlertID", req.AlertID, "PharmacyID", req.PharmacyID)
+		return businessErr
+	}
+
+	// Enforce the requested quantity from the real stock table. A pharmacy
+	// may carry the medication but still be unavailable when it does not have
+	// enough units for this specific request.
+	var requestedQuantity, availableQuantity int32
+	if err = tx.QueryRow(ctx, `
+		SELECT COALESCE(requested_quantity, 1)
+		FROM medication_alerts
+		WHERE id = $1`, req.AlertID).Scan(&requestedQuantity); err != nil {
+		dbErr := NewDatabaseError(operation, "Failed to fetch requested quantity", err)
+		s.logError(ctx, dbErr, "AlertID", req.AlertID)
+		return dbErr
+	}
+	if err = tx.QueryRow(ctx, `
+		SELECT COALESCE((
+			SELECT s.quantity
+			FROM stock s
+			WHERE s.pharmacy_id = $1 AND s.medication_id = $2
+		), 0)`, req.PharmacyID, alert.MedicationID.Int32).Scan(&availableQuantity); err != nil {
+		dbErr := NewDatabaseError(operation, "Failed to fetch pharmacy stock", err)
+		s.logError(ctx, dbErr, "AlertID", req.AlertID, "PharmacyID", req.PharmacyID)
+		return dbErr
+	}
+	if req.ResponseType == "available" && availableQuantity < requestedQuantity {
+		log.Printf("Pharmacy %d cannot fulfill alert %d: stock=%d requested=%d; converting response to unavailable",
+			req.PharmacyID, req.AlertID, availableQuantity, requestedQuantity)
+		req.ResponseType = "unavailable"
 	}
 
 	// Create pharmacist response with enhanced validation
@@ -826,17 +885,18 @@ type dbQuerier interface {
 }
 
 // notifyNextPharmacy picks the nearest pharmacy (within the alert's radius)
-// that has at least the requested quantity in stock and has not been alerted
-// yet, records the notification and extends the alert's expiry. It does NOT
-// send the SSE push; the caller does that after committing.
+// that carries the medication with a positive stock quantity and has not been
+// alerted yet. The requested quantity is intentionally NOT part of selection:
+// a pharmacy with one unit can still be tried and then answer unavailable when
+// the patient needs more than one. It does NOT send the SSE push; the caller
+// does that after committing.
 func (s *AlertService) notifyNextPharmacy(ctx context.Context, q dbQuerier, alertID int32) (int32, bool, error) {
 	var medicationID int32
 	var lat, lng, radius float64
-	var qty int32
 	err := q.QueryRow(ctx, `
 		SELECT medication_id, customer_latitude, customer_longitude,
-		       COALESCE(search_radius_km, 10), COALESCE(requested_quantity, 1)
-		FROM medication_alerts WHERE id = $1`, alertID).Scan(&medicationID, &lat, &lng, &radius, &qty)
+		       COALESCE(search_radius_km, 10)
+		FROM medication_alerts WHERE id = $1`, alertID).Scan(&medicationID, &lat, &lng, &radius)
 	if err != nil {
 		return 0, false, err
 	}
@@ -851,15 +911,15 @@ func (s *AlertService) notifyNextPharmacy(ctx context.Context, q dbQuerier, aler
 			    sin(radians($1::float8)) * sin(radians(p.latitude))
 			  ))) AS dist
 			FROM pharmacies p
-			JOIN stock s ON s.pharmacy_id = p.id AND s.medication_id = $4 AND s.quantity >= $5
+			JOIN stock st ON st.pharmacy_id = p.id AND st.medication_id = $4 AND st.quantity > 0
 			WHERE p.latitude IS NOT NULL AND p.longitude IS NOT NULL
 			  AND NOT EXISTS (
 			    SELECT 1 FROM pharmacy_alert_notifications n
-			    WHERE n.alert_id = $6 AND n.pharmacy_id = p.id)
+			    WHERE n.alert_id = $5 AND n.pharmacy_id = p.id)
 		) t
 		WHERE dist <= $3
 		ORDER BY dist ASC
-		LIMIT 1`, lat, lng, radius, medicationID, qty, alertID).Scan(&pharmacyID)
+		LIMIT 1`, lat, lng, radius, medicationID, alertID).Scan(&pharmacyID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, false, nil
@@ -880,6 +940,66 @@ func (s *AlertService) notifyNextPharmacy(ctx context.Context, q dbQuerier, aler
 		return 0, false, err
 	}
 	return pharmacyID, true, nil
+}
+
+// dispatchPharmacyAlert decides how the currently-selected pharmacy is handled.
+// Pharmacies linked to a user account follow the normal dashboard/SSE workflow.
+// Pharmacies without an account are evaluated automatically from the current
+// stock table so they can still participate in the nearby one-by-one search.
+func (s *AlertService) dispatchPharmacyAlert(ctx context.Context, pharmacyID, alertID, medicationID int32) {
+	var hasManagedAccount bool
+	if err := s.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM users WHERE managed_pharmacy_id = $1
+		)`, pharmacyID).Scan(&hasManagedAccount); err != nil {
+		s.logError(ctx, NewDatabaseError("dispatchPharmacyAlert", "Failed to determine pharmacy account status", err),
+			"AlertID", alertID, "PharmacyID", pharmacyID)
+		return
+	}
+
+	if hasManagedAccount {
+		_ = s.sendNotificationToPharmacy(ctx, pharmacyID, alertID, medicationID)
+		s.scheduleEscalation(alertID, pharmacyID)
+		return
+	}
+
+	if err := s.processUnmanagedPharmacy(ctx, pharmacyID, alertID, medicationID); err != nil {
+		s.logError(ctx, NewInternalError("dispatchPharmacyAlert", "Failed to auto-process unmanaged pharmacy", err),
+			"AlertID", alertID, "PharmacyID", pharmacyID)
+		// If automatic processing fails, still give this pharmacy the normal
+		// response window before advancing so the alert cannot get stuck.
+		s.scheduleEscalation(alertID, pharmacyID)
+	}
+}
+
+// processUnmanagedPharmacy automatically answers the current alert from stock.
+// It uses the same response path as a real pharmacist: enough stock means
+// available; otherwise unavailable immediately advances to the next pharmacy.
+func (s *AlertService) processUnmanagedPharmacy(ctx context.Context, pharmacyID, alertID, medicationID int32) error {
+	var requestedQuantity, availableQuantity int32
+	if err := s.db.QueryRow(ctx, `
+		SELECT COALESCE(ma.requested_quantity, 1),
+			COALESCE((
+				SELECT st.quantity
+				FROM stock st
+				WHERE st.pharmacy_id = $2 AND st.medication_id = $3
+			), 0)
+		FROM medication_alerts ma
+		WHERE ma.id = $1`, alertID, pharmacyID, medicationID).Scan(&requestedQuantity, &availableQuantity); err != nil {
+		return err
+	}
+
+	responseType := "unavailable"
+	if availableQuantity >= requestedQuantity {
+		responseType = "available"
+	}
+
+	return s.SubmitPharmacistResponse(ctx, PharmacistResponseRequest{
+		AlertID:             alertID,
+		PharmacyID:          pharmacyID,
+		ResponseType:        responseType,
+		ResponseTimeSeconds: 0,
+	})
 }
 
 // scheduleEscalation moves on to the next pharmacy if this one stays silent.
@@ -913,7 +1033,8 @@ func (s *AlertService) advanceAlert(ctx context.Context, alertID, fromPharmacyID
 	// Lock the alert so a timeout and an "unavailable" reply can't both advance it.
 	var status string
 	var customerID int32
-	if err = tx.QueryRow(ctx, `SELECT status, customer_id FROM medication_alerts WHERE id = $1 FOR UPDATE`, alertID).Scan(&status, &customerID); err != nil {
+	var medicationID int32
+	if err = tx.QueryRow(ctx, `SELECT status, customer_id, medication_id FROM medication_alerts WHERE id = $1 FOR UPDATE`, alertID).Scan(&status, &customerID, &medicationID); err != nil {
 		return
 	}
 	if status != "pending" {
@@ -956,7 +1077,8 @@ func (s *AlertService) advanceAlert(ctx context.Context, alertID, fromPharmacyID
 	}
 
 	log.Printf("Alert %d: moved on to pharmacy %d", alertID, nextID)
-	_ = s.sendNotificationToPharmacy(ctx, nextID, alertID, 0)
+	// Notify the patient before dispatching: an unmanaged pharmacy may answer
+	// immediately and recursively advance the alert to another pharmacy.
 	if s.sseHub != nil {
 		s.sseHub.BroadcastToAlert(alertID, CustomerAlertEvent{
 			Type:    "trying_next",
@@ -964,5 +1086,5 @@ func (s *AlertService) advanceAlert(ctx context.Context, alertID, fromPharmacyID
 			Data:    map[string]int{"seconds": int(pharmacyResponseTimeout / time.Second)},
 		})
 	}
-	s.scheduleEscalation(alertID, nextID)
+	s.dispatchPharmacyAlert(ctx, nextID, alertID, medicationID)
 }

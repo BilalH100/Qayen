@@ -15,7 +15,7 @@ import { BASE_URL } from "@/utils/api";
 import dynamic from "next/dynamic";
 
 const LocationMapPicker = dynamic(
-  () => import("./location-picker-map").then((mod) => mod.LocationMapPicker),
+  () => import("./location-picker-map").then((mod) => mod.LocationPickerMap),
   { ssr: false }
 );
 
@@ -87,7 +87,8 @@ export function HeroSearch() {
   const [waitingForResponses, setWaitingForResponses] = useState(false);
   const ATTEMPT_SECONDS = 30; // time each pharmacy gets before we try the next one
   const [timeRemaining, setTimeRemaining] = useState(ATTEMPT_SECONDS);
-  // How many units the patient needs (only pharmacies with enough stock are alerted).
+  // How many units the patient needs. A pharmacy is tried if it has the medication
+  // in positive stock; the requested quantity is checked when it responds.
   const [requestedQuantity, setRequestedQuantity] = useState("1");
   const [statusNote, setStatusNote] = useState<string | null>(null);
   const waitCapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,6 +111,7 @@ export function HeroSearch() {
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resultsPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const seenPharmacyIdsRef = useRef<Set<number>>(new Set());
 
   // Always close any open SSE connection / countdown when the component
@@ -118,6 +120,7 @@ export function HeroSearch() {
     return () => {
       eventSourceRef.current?.close();
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (resultsPollingRef.current) clearInterval(resultsPollingRef.current);
     };
   }, []);
 
@@ -260,7 +263,13 @@ export function HeroSearch() {
         setWaitingForResponses(true);
         setTimeRemaining(ATTEMPT_SECONDS);
         // Safety net in case the live connection drops: stop waiting after 5 min.
-        waitCapTimeoutRef.current = setTimeout(() => setWaitingForResponses(false), 5 * 60 * 1000);
+        waitCapTimeoutRef.current = setTimeout(() => {
+        setWaitingForResponses(false);
+        if (resultsPollingRef.current) {
+          clearInterval(resultsPollingRef.current);
+          resultsPollingRef.current = null;
+        }
+      }, 5 * 60 * 1000);
         
         toast({
           title: "Alert Created",
@@ -356,11 +365,15 @@ export function HeroSearch() {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
         }
+        if (resultsPollingRef.current) {
+          clearInterval(resultsPollingRef.current);
+          resultsPollingRef.current = null;
+        }
         setWaitingForResponses(false);
-        setStatusNote("No pharmacy with enough stock could help. Try a smaller quantity or try again later.");
+        setStatusNote("No nearby pharmacy could fulfill this request. Try a smaller quantity or try again later.");
         toast({
           title: "No pharmacy available",
-          description: "All nearby pharmacies with enough stock were tried.",
+          description: "All nearby pharmacies carrying the medication were tried.",
           variant: "destructive",
         });
         return;
@@ -385,6 +398,10 @@ export function HeroSearch() {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
         }
+        if (resultsPollingRef.current) {
+          clearInterval(resultsPollingRef.current);
+          resultsPollingRef.current = null;
+        }
         setWaitingForResponses(false);
         setStatusNote(null);
       }
@@ -408,12 +425,47 @@ export function HeroSearch() {
         } else {
           toast({
             title: "Not available",
-            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) doesn't have it in stock.`,
+            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) cannot fulfill the requested quantity.`,
             variant: "destructive",
           });
         }
       });
     };
+
+    // Backup polling protects against a response being created before the SSE
+    // connection is fully established (important for automatic responses from
+    // pharmacies without accounts). SSE remains the fast path.
+    if (resultsPollingRef.current) clearInterval(resultsPollingRef.current);
+    resultsPollingRef.current = setInterval(async () => {
+      const result = await fetchAlertResults(alertId);
+      if (!result || eventSourceRef.current !== eventSource) return;
+
+      const pharmacies: PharmacyResponse[] = result.pharmacies || [];
+      setAlertResult((prev) =>
+        prev
+          ? { ...prev, status: result.status || prev.status, pharmacies }
+          : null,
+      );
+
+      const hasOffer = pharmacies.some((p) => p.response_type !== "unavailable");
+      const searchEnded = ["expired", "completed", "cancelled"].includes(result.status);
+      if (hasOffer || searchEnded) {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        if (resultsPollingRef.current) {
+          clearInterval(resultsPollingRef.current);
+          resultsPollingRef.current = null;
+        }
+        setWaitingForResponses(false);
+        setStatusNote(
+          hasOffer
+            ? null
+            : "No nearby pharmacy could fulfill the requested quantity. Try a smaller quantity or a larger search radius.",
+        );
+      }
+    }, 2000);
 
     eventSource.onerror = (err) => {
       console.error("[alert] SSE connection error for alert", alertId, err, "readyState:", eventSource.readyState);
