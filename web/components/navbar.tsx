@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Menu, X, Search, User, ShoppingCart, Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,9 +91,15 @@ export function Navbar() {
           {/* <div className="bg-teal-600 text-white p-1 rounded">
             <Image src={logo} alt={""} height={50} width={50}/>
           </div> */}
-          <span className="font-bold text-xl hidden sm:inline-block p-2">
-            Kayena
-          </span>
+        <Image
+          src="/Logo_HomePage.png"
+          alt="Qayen"
+          width={100}
+          height={60}
+          priority
+          style={{ width: "70px", height: "60px" }}
+          className="object-contain"
+/>
         </Link>
 
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium flex-1">

@@ -9,7 +9,7 @@ import { PharmacyCard } from "@/components/pharmacy-card"
 import { MedicationCard } from "@/components/medication-card"
 import { HeroSearch } from "@/components/hero-search"
 import { CategoryPill } from "@/components/category-pill"
-import logo from "../public/logo.png"
+import logo from "../public/Home_Page.png"
 import { useEffect, useState } from "react"
 import { BASE_URL } from "@/utils/api"
 

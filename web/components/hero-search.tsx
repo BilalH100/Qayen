@@ -15,7 +15,7 @@ import { BASE_URL } from "@/utils/api";
 import dynamic from "next/dynamic";
 
 const LocationMapPicker = dynamic(
-  () => import("./location-picker-map").then((mod) => mod.LocationPickerMap),
+  () => import("./location-picker-map").then((mod) => mod.LocationMapPicker),
   { ssr: false }
 );
 
@@ -85,10 +85,39 @@ export function HeroSearch() {
   const [alertResult, setAlertResult] = useState<AlertResult | null>(null);
   const [creatingAlert, setCreatingAlert] = useState(false);
   const [waitingForResponses, setWaitingForResponses] = useState(false);
+  // ---- Pharmacy search (name -> suggestions -> map) ----
+  interface PharmacyOption {
+    id: number;
+    name: string;
+    address: string;
+    city: string;
+    phone: string;
+    latitude: string;
+    longitude: string;
+  }
+  const [allPharmacies, setAllPharmacies] = useState<PharmacyOption[]>([]);
+  const [selectedPharmacy, setSelectedPharmacy] = useState<PharmacyOption | null>(null);
+
+  const pharmacySuggestions =
+    searchType === "pharmacy" && query.trim().length >= 1 && !selectedPharmacy
+      ? allPharmacies
+          .filter((p) =>
+            `${p.name} ${p.city} ${p.address}`.toLowerCase().includes(query.trim().toLowerCase()),
+          )
+          .slice(0, 8)
+      : [];
+
+  useEffect(() => {
+    if (allPharmacies.length > 0) return; // load once; markers show on the map at all times
+    fetch(`${BASE_URL}/pharmacies`)
+      .then((r) => r.json())
+      .then((d) => setAllPharmacies(Array.isArray(d?.pharmacies) ? d.pharmacies : []))
+      .catch((e) => console.error("Error loading pharmacies:", e));
+  }, [allPharmacies.length]);
+
   const ATTEMPT_SECONDS = 30; // time each pharmacy gets before we try the next one
   const [timeRemaining, setTimeRemaining] = useState(ATTEMPT_SECONDS);
-  // How many units the patient needs. A pharmacy is tried if it has the medication
-  // in positive stock; the requested quantity is checked when it responds.
+  // How many units the patient needs (only pharmacies with enough stock are alerted).
   const [requestedQuantity, setRequestedQuantity] = useState("1");
   const [statusNote, setStatusNote] = useState<string | null>(null);
   const waitCapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,7 +140,6 @@ export function HeroSearch() {
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const resultsPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const seenPharmacyIdsRef = useRef<Set<number>>(new Set());
 
   // Always close any open SSE connection / countdown when the component
@@ -120,7 +148,6 @@ export function HeroSearch() {
     return () => {
       eventSourceRef.current?.close();
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-      if (resultsPollingRef.current) clearInterval(resultsPollingRef.current);
     };
   }, []);
 
@@ -205,8 +232,10 @@ export function HeroSearch() {
       }
       await createMedicationAlert();
     } else {
-      console.log(`Searching for ${searchType}: ${query} in ${location}`);
-      // Handle pharmacy search here
+      if (searchType === "pharmacy" && !selectedPharmacy && pharmacySuggestions.length > 0) {
+        setSelectedPharmacy(pharmacySuggestions[0]);
+        setQuery(pharmacySuggestions[0].name);
+      }
     }
   };
 
@@ -263,13 +292,7 @@ export function HeroSearch() {
         setWaitingForResponses(true);
         setTimeRemaining(ATTEMPT_SECONDS);
         // Safety net in case the live connection drops: stop waiting after 5 min.
-        waitCapTimeoutRef.current = setTimeout(() => {
-        setWaitingForResponses(false);
-        if (resultsPollingRef.current) {
-          clearInterval(resultsPollingRef.current);
-          resultsPollingRef.current = null;
-        }
-      }, 5 * 60 * 1000);
+        waitCapTimeoutRef.current = setTimeout(() => setWaitingForResponses(false), 5 * 60 * 1000);
         
         toast({
           title: "Alert Created",
@@ -365,15 +388,11 @@ export function HeroSearch() {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
         }
-        if (resultsPollingRef.current) {
-          clearInterval(resultsPollingRef.current);
-          resultsPollingRef.current = null;
-        }
         setWaitingForResponses(false);
-        setStatusNote("No nearby pharmacy could fulfill this request. Try a smaller quantity or try again later.");
+        setStatusNote("No pharmacy with enough stock could help. Try a smaller quantity or try again later.");
         toast({
           title: "No pharmacy available",
-          description: "All nearby pharmacies carrying the medication were tried.",
+          description: "All nearby pharmacies with enough stock were tried.",
           variant: "destructive",
         });
         return;
@@ -398,10 +417,6 @@ export function HeroSearch() {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
         }
-        if (resultsPollingRef.current) {
-          clearInterval(resultsPollingRef.current);
-          resultsPollingRef.current = null;
-        }
         setWaitingForResponses(false);
         setStatusNote(null);
       }
@@ -425,47 +440,12 @@ export function HeroSearch() {
         } else {
           toast({
             title: "Not available",
-            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) cannot fulfill the requested quantity.`,
+            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) doesn't have it in stock.`,
             variant: "destructive",
           });
         }
       });
     };
-
-    // Backup polling protects against a response being created before the SSE
-    // connection is fully established (important for automatic responses from
-    // pharmacies without accounts). SSE remains the fast path.
-    if (resultsPollingRef.current) clearInterval(resultsPollingRef.current);
-    resultsPollingRef.current = setInterval(async () => {
-      const result = await fetchAlertResults(alertId);
-      if (!result || eventSourceRef.current !== eventSource) return;
-
-      const pharmacies: PharmacyResponse[] = result.pharmacies || [];
-      setAlertResult((prev) =>
-        prev
-          ? { ...prev, status: result.status || prev.status, pharmacies }
-          : null,
-      );
-
-      const hasOffer = pharmacies.some((p) => p.response_type !== "unavailable");
-      const searchEnded = ["expired", "completed", "cancelled"].includes(result.status);
-      if (hasOffer || searchEnded) {
-        if (countdownIntervalRef.current) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-        }
-        if (resultsPollingRef.current) {
-          clearInterval(resultsPollingRef.current);
-          resultsPollingRef.current = null;
-        }
-        setWaitingForResponses(false);
-        setStatusNote(
-          hasOffer
-            ? null
-            : "No nearby pharmacy could fulfill the requested quantity. Try a smaller quantity or a larger search radius.",
-        );
-      }
-    }, 2000);
 
     eventSource.onerror = (err) => {
       console.error("[alert] SSE connection error for alert", alertId, err, "readyState:", eventSource.readyState);
@@ -671,10 +651,51 @@ export function HeroSearch() {
               placeholder="Search for pharmacies..."
               className="pl-32 h-12"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSelectedPharmacy(null);
+              }}
             />
           )}
+
+          {pharmacySuggestions.length > 0 && (
+            <div className="absolute w-full bg-white dark:bg-slate-800 shadow-lg rounded-md mt-1 border border-slate-200 dark:border-slate-700 z-50 max-h-64 overflow-y-auto">
+              {pharmacySuggestions.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  className="block w-full px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700"
+                  onClick={() => {
+                    setSelectedPharmacy(p);
+                    setQuery(p.name);
+                  }}
+                >
+                  <p className="font-medium">{p.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {p.address}{p.city ? ` • ${p.city}` : ""}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {searchType === "pharmacy" &&
+            query.trim().length >= 1 &&
+            !selectedPharmacy &&
+            allPharmacies.length > 0 &&
+            pharmacySuggestions.length === 0 && (
+              <div className="absolute w-full bg-white dark:bg-slate-800 shadow-lg rounded-md mt-1 border p-3 text-sm text-slate-500 z-50">
+                No pharmacies found
+              </div>
+            )}
         </div>
+
+        {searchType === "pharmacy" && selectedPharmacy && (
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            <strong>{selectedPharmacy.name}</strong> — {selectedPharmacy.address}
+            {selectedPharmacy.phone ? ` • ${selectedPharmacy.phone}` : ""}
+          </p>
+        )}
 
         <div className="relative">
           <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
@@ -711,6 +732,8 @@ export function HeroSearch() {
             initialLat={parseFloat(userCoordinates.latitude)}
             initialLng={parseFloat(userCoordinates.longitude)}
             onLocationPicked={handleMapLocationPicked}
+            pharmacies={allPharmacies}
+            selectedPharmacyId={searchType === "pharmacy" ? selectedPharmacy?.id ?? null : null}
           />
 
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
