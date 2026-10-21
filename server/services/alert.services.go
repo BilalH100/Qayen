@@ -218,8 +218,8 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 		return nil, err
 	}
 
-	if req.SearchRadius <= 0 || req.SearchRadius > 100 {
-		err := NewValidationError(operation, "Invalid search radius", fmt.Sprintf("SearchRadius: %f (must be between 0.1 and 100 km)", req.SearchRadius))
+	if req.SearchRadius <= 0 || req.SearchRadius > 2500 {
+		err := NewValidationError(operation, "Invalid search radius", fmt.Sprintf("SearchRadius: %f (must be between 0.1 and 2500 km)", req.SearchRadius))
 		s.logError(ctx, err)
 		return nil, err
 	}
@@ -283,8 +283,8 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 	}
 	if !found {
 		businessErr := NewBusinessLogicError(operation,
-			"No nearby pharmacy has this medication in stock",
-			fmt.Sprintf("Try a different medication or a larger search radius (current: %.0f km)", req.SearchRadius))
+			"No pharmacies were found within the selected search radius",
+			fmt.Sprintf("Try a location closer to pharmacies or a larger search radius (current: %.0f km)", req.SearchRadius))
 		s.logError(ctx, businessErr, "AlertID", alert.ID)
 		return nil, businessErr
 	}
@@ -885,18 +885,17 @@ type dbQuerier interface {
 }
 
 // notifyNextPharmacy picks the nearest pharmacy (within the alert's radius)
-// that carries the medication with a positive stock quantity and has not been
-// alerted yet. The requested quantity is intentionally NOT part of selection:
-// a pharmacy with one unit can still be tried and then answer unavailable when
-// the patient needs more than one. It does NOT send the SSE push; the caller
-// does that after committing.
+// that has not been alerted yet, regardless of whether a stock row exists.
+// Managed pharmacies can answer from their dashboard; pharmacies without an
+// account are evaluated automatically from their stock, including an
+// "unavailable" response when no stock row exists. It does NOT send the SSE
+// push; the caller does that after committing.
 func (s *AlertService) notifyNextPharmacy(ctx context.Context, q dbQuerier, alertID int32) (int32, bool, error) {
-	var medicationID int32
 	var lat, lng, radius float64
 	err := q.QueryRow(ctx, `
-		SELECT medication_id, customer_latitude, customer_longitude,
+		SELECT customer_latitude, customer_longitude,
 		       COALESCE(search_radius_km, 10)
-		FROM medication_alerts WHERE id = $1`, alertID).Scan(&medicationID, &lat, &lng, &radius)
+		FROM medication_alerts WHERE id = $1`, alertID).Scan(&lat, &lng, &radius)
 	if err != nil {
 		return 0, false, err
 	}
@@ -911,15 +910,14 @@ func (s *AlertService) notifyNextPharmacy(ctx context.Context, q dbQuerier, aler
 			    sin(radians($1::float8)) * sin(radians(p.latitude))
 			  ))) AS dist
 			FROM pharmacies p
-			JOIN stock st ON st.pharmacy_id = p.id AND st.medication_id = $4 AND st.quantity > 0
 			WHERE p.latitude IS NOT NULL AND p.longitude IS NOT NULL
 			  AND NOT EXISTS (
 			    SELECT 1 FROM pharmacy_alert_notifications n
-			    WHERE n.alert_id = $5 AND n.pharmacy_id = p.id)
+			    WHERE n.alert_id = $4 AND n.pharmacy_id = p.id)
 		) t
 		WHERE dist <= $3
 		ORDER BY dist ASC
-		LIMIT 1`, lat, lng, radius, medicationID, alertID).Scan(&pharmacyID)
+		LIMIT 1`, lat, lng, radius, alertID).Scan(&pharmacyID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, false, nil

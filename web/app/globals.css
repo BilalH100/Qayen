@@ -95,3 +95,19 @@
 .leaflet-control {
   z-index: 1 !important;
 }
+
+/* The active language controls global text direction. Keep maps and map controls LTR. */
+html[dir="rtl"],
+html[dir="rtl"] body {
+  direction: rtl;
+}
+
+html[dir="rtl"] input,
+html[dir="rtl"] textarea,
+html[dir="rtl"] select {
+  text-align: start;
+}
+
+html[dir="rtl"] .leaflet-container {
+  direction: ltr;
+}

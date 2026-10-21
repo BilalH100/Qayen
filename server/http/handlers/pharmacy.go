@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	httpx "kayena/server/http"
 	"kayena/server/models"
@@ -101,7 +102,7 @@ func GetPharmacyDetailsHandler(s services.PharmacyService) http.HandlerFunc {
 	}
 }
 
-// UpdatePharmacyHandler updates a pharmacy's editable info (name, address, city, phone).
+// UpdatePharmacyHandler updates pharmacy contact details and its selected map pin.
 func UpdatePharmacyHandler(s services.PharmacyService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := chi.URLParam(r, "id")
@@ -119,6 +120,10 @@ func UpdatePharmacyHandler(s services.PharmacyService) http.HandlerFunc {
 
 		res, err := s.UpdateService(r.Context(), int32(id), &body)
 		if err != nil {
+			if errors.Is(err, services.ErrInvalidPharmacyLocation) {
+				httpx.RespondWithJSON(w, http.StatusBadRequest, schemas.Message{Message: err.Error()})
+				return
+			}
 			httpx.RespondWithError(w, fmt.Errorf("internal server error"))
 			return
 		}

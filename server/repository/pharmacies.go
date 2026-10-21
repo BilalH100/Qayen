@@ -72,19 +72,29 @@ func (s *sqlcPharmacyRepo) Create(ctx context.Context, p *schemas.Pharmacy) erro
 }
 
 func (s *sqlcPharmacyRepo) Update(ctx context.Context, id int32, p *schemas.Pharmacy) (*schemas.Pharmacy, error) {
-	// Fetch current record so we preserve latitude/longitude, which the
-	// pharmacy-info edit form never sends.
+	// Keep existing coordinates for older clients; update only an explicit pair.
 	current, err := s.queries.GetPharmacyByID(ctx, id)
 	if err != nil {
 		return nil, wrap(err, "")
+	}
+	latitude, longitude := current.Latitude, current.Longitude
+	if p.Latitude != "" && p.Longitude != "" {
+		latitude, err = utils.StringToFloat8(p.Latitude)
+		if err != nil {
+			return nil, wrap(err, "invalid latitude")
+		}
+		longitude, err = utils.StringToFloat8(p.Longitude)
+		if err != nil {
+			return nil, wrap(err, "invalid longitude")
+		}
 	}
 
 	res, err := s.queries.UpdatePharmacy(ctx, sqlc.UpdatePharmacyParams{
 		ID:        id,
 		Name:      p.Name,
 		Address:   p.Address,
-		Latitude:  current.Latitude,
-		Longitude: current.Longitude,
+		Latitude:  latitude,
+		Longitude: longitude,
 		City:      p.City,
 		Phone:     p.Phone,
 	})

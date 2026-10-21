@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
+    "test:translations": "node --test tests/translation.test.cjs",
     "start": "next start"
   },
   "dependencies": {

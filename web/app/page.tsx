@@ -12,6 +12,7 @@ import { CategoryPill } from "@/components/category-pill"
 import logo from "../public/Home_Page.png"
 import { useEffect, useState } from "react"
 import { BASE_URL } from "@/utils/api"
+import { useAutoTranslation } from "@/contexts/auto-translation-context"
 
 interface Medication {
   id: number;
@@ -38,6 +39,7 @@ interface Medication {
 }
 
 export default function Home() {
+  const { language } = useAutoTranslation();
   const [featuredMedications, setFeaturedMedications] = useState<Medication[]>([]);
 
   useEffect(() => {
@@ -62,9 +64,14 @@ export default function Home() {
         <div className="container mx-auto px-4 py-20 md:py-32">
           <div className="grid gap-8 md:grid-cols-2 md:gap-12 items-center">
             <div className="space-y-6">
-              <h1 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white md:text-5xl lg:text-6xl">
-                Find the right <span className="text-teal-600 dark:text-teal-400">medication</span> at the right{" "}
-                <span className="text-teal-600 dark:text-teal-400">pharmacy</span>
+              <h1 data-translate-ignore className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white md:text-5xl lg:text-6xl">
+                {language === "ar" ? (
+                  <>اعثر على <span className="text-teal-600 dark:text-teal-400">الدواء المناسب</span> في <span className="text-teal-600 dark:text-teal-400">الصيدلية المناسبة</span></>
+                ) : language === "fr" ? (
+                  <>Trouvez le bon <span className="text-teal-600 dark:text-teal-400">médicament</span> dans la bonne <span className="text-teal-600 dark:text-teal-400">pharmacie</span></>
+                ) : (
+                  <>Find the right <span className="text-teal-600 dark:text-teal-400">medication</span> at the right <span className="text-teal-600 dark:text-teal-400">pharmacy</span></>
+                )}
               </h1>
               <p className="text-lg text-slate-600 dark:text-slate-300 md:text-xl">
                 Access thousands of medications and find nearby pharmacies with real-time availability and pricing.

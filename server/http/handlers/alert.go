@@ -53,8 +53,8 @@ func (h *AlertHandler) CreateMedicationAlert(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Limit search radius to reasonable bounds
-	if req.SearchRadius > 100 {
-		req.SearchRadius = 100
+	if req.SearchRadius > 2500 {
+		req.SearchRadius = 2500
 	}
 
 	result, err := h.alertService.CreateMedicationAlert(r.Context(), req)

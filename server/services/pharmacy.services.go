@@ -2,10 +2,35 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"kayena/server/internal/catalogimport"
 	"kayena/server/models"
 	"kayena/server/repository"
 	"kayena/server/schemas"
+	"strconv"
+	"strings"
 )
+
+var ErrInvalidPharmacyLocation = errors.New("invalid pharmacy address or coordinates")
+
+func validatePharmacyUpdate(p *schemas.Pharmacy) error {
+	if strings.TrimSpace(p.Name) == "" || strings.TrimSpace(p.Address) == "" || strings.TrimSpace(p.City) == "" {
+		return fmt.Errorf("%w: name, exact address and city are required", ErrInvalidPharmacyLocation)
+	}
+	if p.Latitude == "" && p.Longitude == "" {
+		return nil
+	}
+	if !catalogimport.IsCoordinateNumber(p.Latitude) || !catalogimport.IsCoordinateNumber(p.Longitude) {
+		return fmt.Errorf("%w: provide both latitude and longitude as numbers", ErrInvalidPharmacyLocation)
+	}
+	lat, latErr := strconv.ParseFloat(p.Latitude, 64)
+	lon, lonErr := strconv.ParseFloat(p.Longitude, 64)
+	if latErr != nil || lonErr != nil || !catalogimport.ValidCoordinates(lat, lon) {
+		return fmt.Errorf("%w: latitude must be between -90 and 90 and longitude between -180 and 180", ErrInvalidPharmacyLocation)
+	}
+	return nil
+}
 
 type PharmacyService interface {
 	GetByIdService(ctx context.Context, id int32) (*schemas.Pharmacy, error)
@@ -37,6 +62,9 @@ func (s *pharmacyService) CreateService(ctx context.Context, p *schemas.Pharmacy
 }
 
 func (s *pharmacyService) UpdateService(ctx context.Context, id int32, p *schemas.Pharmacy) (*schemas.Pharmacy, error) {
+	if err := validatePharmacyUpdate(p); err != nil {
+		return nil, err
+	}
 	return s.pharmaryRepo.Update(ctx, id, p)
 }
 

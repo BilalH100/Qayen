@@ -1,0 +1,12 @@
+services:
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: qayen-libretranslate
+    restart: unless-stopped
+    environment:
+      LT_LOAD_ONLY: en,fr,ar
+      LT_REQ_LIMIT: 60
+      LT_BATCH_LIMIT: 35
+    ports:
+      # Keep the local translation service private; Next.js calls it server-side.
+      - "127.0.0.1:5000:5000"

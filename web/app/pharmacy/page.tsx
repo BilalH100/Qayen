@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,13 +24,24 @@ import { BASE_URL } from "@/utils/api";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
 
+const LocationMapPicker = dynamic(
+  () => import("@/components/location-picker-map").then((module) => module.LocationMapPicker),
+  { ssr: false },
+);
+
+function coordinateValue(value: string | number | null | undefined): string {
+  return value !== null && value !== undefined && String(value).trim() !== "" && Number.isFinite(Number(value))
+    ? String(value)
+    : "";
+}
+
 interface Pharmacy {
   id: number;
   name: string;
   address: string;
   phone: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | string;
+  longitude: number | string;
   city: string;
 }
 
@@ -75,6 +87,8 @@ export default function PharmacistDashboard() {
     address: "",
     phone: "",
     city: "",
+    latitude: "",
+    longitude: "",
   });
   const [updating, setUpdating] = useState(false);
 
@@ -92,7 +106,7 @@ export default function PharmacistDashboard() {
   >([]);
   const [stockSelectedMed, setStockSelectedMed] =
     useState<MedicationSearchResult | null>(null);
-  const [stockQuantity, setStockQuantity] = useState("10");
+  const [stockQuantity, setStockQuantity] = useState("");
   const [addingStock, setAddingStock] = useState(false);
 
   useEffect(() => {
@@ -167,7 +181,7 @@ export default function PharmacistDashboard() {
   const addStock = async () => {
     if (!pharmacy || !stockSelectedMed) return;
     const quantity = parseInt(stockQuantity, 10);
-    if (isNaN(quantity) || quantity < 0) {
+    if (!/^\d+$/.test(stockQuantity.trim()) || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > 2147483647) {
       toast.error("Enter a valid quantity");
       return;
     }
@@ -189,7 +203,7 @@ export default function PharmacistDashboard() {
         setStockSelectedMed(null);
         setStockSearchTerm("");
         setStockSearchResults([]);
-        setStockQuantity("10");
+        setStockQuantity("");
         fetchStock(false);
       } else {
         throw new Error("Failed to add stock");
@@ -235,6 +249,8 @@ export default function PharmacistDashboard() {
           address: data.pharmacy.address,
           phone: data.pharmacy.phone,
           city: data.pharmacy.city,
+          latitude: coordinateValue(data.pharmacy.latitude),
+          longitude: coordinateValue(data.pharmacy.longitude),
         });
       } else {
         console.error("Failed to fetch pharmacy details");
@@ -254,6 +270,8 @@ export default function PharmacistDashboard() {
         address: pharmacy.address,
         phone: pharmacy.phone,
         city: pharmacy.city,
+        latitude: coordinateValue(pharmacy.latitude),
+        longitude: coordinateValue(pharmacy.longitude),
       });
     }
   }, [pharmacy]);
@@ -279,6 +297,18 @@ export default function PharmacistDashboard() {
 
   const handleEditSubmit = async () => {
     if (!pharmacy) return;
+
+    const latitude = Number(editForm.latitude);
+    const longitude = Number(editForm.longitude);
+    if (
+      !editForm.name.trim() || !editForm.address.trim() || !editForm.city.trim() ||
+      !editForm.latitude.trim() || !editForm.longitude.trim() ||
+      !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180
+    ) {
+      toast.error("Enter your pharmacy name, exact address, city, and a valid map location.");
+      return;
+    }
 
     setUpdating(true);
     try {
@@ -446,6 +476,8 @@ export default function PharmacistDashboard() {
                             address: pharmacy.address,
                             phone: pharmacy.phone,
                             city: pharmacy.city,
+                            latitude: coordinateValue(pharmacy.latitude),
+                            longitude: coordinateValue(pharmacy.longitude),
                           });
                         }}
                       >
@@ -518,6 +550,29 @@ export default function PharmacistDashboard() {
                         />
                       </div>
                     </div>
+                    <div className="space-y-3">
+                      <Label>Pharmacy map location</Label>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        Check your exact address and place the pin at your pharmacy entrance. This location is used for nearby alerts.
+                      </p>
+                      <LocationMapPicker
+                        initialLat={editForm.latitude && Number.isFinite(Number(editForm.latitude)) && Math.abs(Number(editForm.latitude)) <= 90 ? Number(editForm.latitude) : 34.0209}
+                        initialLng={editForm.longitude && Number.isFinite(Number(editForm.longitude)) && Math.abs(Number(editForm.longitude)) <= 180 ? Number(editForm.longitude) : -6.8416}
+                        onLocationPicked={(latitude, longitude) => setEditForm((current) => ({
+                          ...current, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6),
+                        }))}
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="pharmacy-latitude">Latitude</Label>
+                          <Input id="pharmacy-latitude" type="number" min={-90} max={90} step="any" dir="ltr" value={editForm.latitude} onChange={(event) => setEditForm({ ...editForm, latitude: event.target.value })} />
+                        </div>
+                        <div>
+                          <Label htmlFor="pharmacy-longitude">Longitude</Label>
+                          <Input id="pharmacy-longitude" type="number" min={-180} max={180} step="any" dir="ltr" value={editForm.longitude} onChange={(event) => setEditForm({ ...editForm, longitude: event.target.value })} />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -547,7 +602,12 @@ export default function PharmacistDashboard() {
                       </div>
                       <div>
                         <p className="text-slate-500 dark:text-slate-400">
-                          Status
+                          Pharmacy map location
+                        </p>
+                        <p className="font-medium" dir="ltr">
+                          {coordinateValue(pharmacy.latitude) && coordinateValue(pharmacy.longitude)
+                            ? `${coordinateValue(pharmacy.latitude)}, ${coordinateValue(pharmacy.longitude)}`
+                            : "Location not set"}
                         </p>
                       </div>
                     </div>

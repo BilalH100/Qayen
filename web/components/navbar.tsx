@@ -7,11 +7,21 @@ import { Menu, X, Search, User, ShoppingCart, Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { LanguageSelector } from "@/components/language-selector";
+import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { AuthModal } from "@/components/auth-modal";
 import { UserMenu } from "@/components/user-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { ROLES } from "@/utils/types";
+
+const navigationLinkClassName =
+  "inline-flex items-center rounded-lg border border-teal-100 bg-teal-50/70 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-100 hover:text-teal-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-teal-700 dark:hover:bg-teal-950 dark:hover:text-teal-300";
+
+const catalogSections = [
+  { href: "/parapharmacies", label: "Parapharmacies" },
+  { href: "/supplies-accessories", label: "Supplies & Accessories" },
+  { href: "/medical-materials", label: "Medical Materials" },
+];
 
 export function Navbar() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -27,34 +37,41 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center">
+      <div className="container flex min-h-16 items-center">
         <Sheet>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden">
+            <Button variant="ghost" size="icon" className="lg:hidden">
               <Menu className="h-5 w-5" />
               <span className="sr-only">Toggle menu</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[300px] sm:w-[400px]">
-            <nav className="flex flex-col gap-4 mt-8">
-              <Link href="/" className="text-lg font-semibold">
+          <SheetContent side="left" className="w-[300px] overflow-y-auto sm:w-[400px]">
+            <nav className="mt-8 flex flex-col gap-2">
+              <Link href="/" className={navigationLinkClassName}>
                 Home
               </Link>
-              <Link href="/medications" className="text-lg font-semibold">
+              <Link href="/medications" className={navigationLinkClassName}>
                 Medications
               </Link>
-              <Link href="/pharmacies" className="text-lg font-semibold">
+              <Link href="/pharmacies" className={navigationLinkClassName}>
                 Pharmacies
               </Link>
               {user?.role === ROLES.PHARMACIST && (
-                <Link href="/pharmacy" className="text-lg font-semibold">
+                <Link href="/pharmacy" className={navigationLinkClassName}>
                   Pharmacy Dashboard
                 </Link>
               )}
-              <Link href="/about" className="text-lg font-semibold">
+              {catalogSections.map(({ href, label }) => (
+                <SheetClose asChild key={href}>
+                  <Link href={href} className={navigationLinkClassName}>
+                    {label}
+                  </Link>
+                </SheetClose>
+              ))}
+              <Link href="/about" className={navigationLinkClassName}>
                 About
               </Link>
-              <Link href="/contact" className="text-lg font-semibold">
+              <Link href="/contact" className={navigationLinkClassName}>
                 Contact
               </Link>
 
@@ -87,7 +104,7 @@ export function Navbar() {
           </SheetContent>
         </Sheet>
 
-        <Link href="/" className="flex items-center gap-2 mr-6">
+        <Link href="/" className="flex shrink-0 items-center gap-2 me-4">
           {/* <div className="bg-teal-600 text-white p-1 rounded">
             <Image src={logo} alt={""} height={50} width={50}/>
           </div> */}
@@ -102,17 +119,17 @@ export function Navbar() {
 />
         </Link>
 
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium flex-1">
+        <nav className="hidden min-w-0 flex-1 flex-wrap items-center gap-2 py-2 pe-3 lg:flex [&>a]:whitespace-nowrap">
           <Link
             href="/medications"
-            className="transition-colors hover:text-foreground/80"
+            className={navigationLinkClassName}
           >
             Medications
           </Link>
 
           <Link
             href="/pharmacies"
-            className="transition-colors hover:text-foreground/80"
+            className={navigationLinkClassName}
           >
             Pharmacies
           </Link>
@@ -120,7 +137,7 @@ export function Navbar() {
           {user?.role === ROLES.PHARMACIST && (
             <Link
               href="/pharmacy"
-              className="transition-colors hover:text-foreground/80"
+              className={navigationLinkClassName}
             >
               Pharmacy Dashboard
             </Link>
@@ -128,26 +145,35 @@ export function Navbar() {
           {user?.role === ROLES.ADMIN && (
             <Link
               href="/admin"
-              className="transition-colors hover:text-foreground/80"
+              className={navigationLinkClassName}
             >
               Admin Dashboard
             </Link>
           )}
+          {catalogSections.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={navigationLinkClassName}
+            >
+              {label}
+            </Link>
+          ))}
           <Link
             href="/about"
-            className="transition-colors hover:text-foreground/80"
+            className={navigationLinkClassName}
           >
             About
           </Link>
           <Link
             href="/contact"
-            className="transition-colors hover:text-foreground/80"
+            className={navigationLinkClassName}
           >
             Contact
           </Link>
         </nav>
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex shrink-0 items-center gap-2 ms-auto">
           {isSearchOpen ? (
             <div className="relative flex items-center">
               <Input
@@ -175,6 +201,7 @@ export function Navbar() {
               <span className="sr-only">Search</span>
             </Button>
           )}
+          <LanguageSelector />
           <ThemeToggle />
           <Button variant="ghost" size="icon">
             <ShoppingCart className="h-5 w-5" />

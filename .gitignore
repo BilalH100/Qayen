@@ -31,3 +31,7 @@ go.work.sum
 # .idea/
 # .vscode/
 tmp
+
+# Next.js local environment files
+.env.local
+.env.*.local

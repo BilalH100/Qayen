@@ -1,8 +1,9 @@
 import type React from "react"
-import "@/app/globals.css"
+import "./globals.css"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/contexts/auth-context"
+import { AutoTranslationProvider } from "@/contexts/auto-translation-context"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Toaster } from "@/components/ui/sonner"
@@ -25,17 +26,19 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          <AuthProvider>
-            <div className="flex min-h-screen flex-col">
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-            <Toaster />
-            <ShadcnToaster />
-          </AuthProvider>
-        </ThemeProvider>
+        <AutoTranslationProvider>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+            <AuthProvider>
+              <div className="flex min-h-screen flex-col">
+                <Navbar />
+                <main className="flex-1">{children}</main>
+                <Footer />
+              </div>
+              <Toaster />
+              <ShadcnToaster />
+            </AuthProvider>
+          </ThemeProvider>
+        </AutoTranslationProvider>
       </body>
     </html>
   )

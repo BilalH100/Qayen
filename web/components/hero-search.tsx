@@ -75,7 +75,6 @@ export function HeroSearch() {
   const [searchType, setSearchType] = useState<"medication" | "pharmacy">(
     "medication",
   );
-  const [location, setLocation] = useState("");
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Medication[]>([]);
@@ -129,7 +128,6 @@ export function HeroSearch() {
     latitude: "33.98978814461598",
     longitude: "-6.857842157069873",
   });
-  const [locationError, setLocationError] = useState<string | null>(null);
   // Quantity the patient has typed for each pharmacy's "Confirm & take"
   // input, keyed by pharmacy_id, plus which pharmacy (if any) is currently
   // being confirmed and which one has already been confirmed.
@@ -151,37 +149,10 @@ export function HeroSearch() {
     };
   }, []);
 
-  const getUserLocation = () => {
-    setLocationError(null);
-
-    if (!navigator.geolocation) {
-      setLocationError("Geolocation is not supported by this browser.");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude.toFixed(6);
-        const longitude = position.coords.longitude.toFixed(6);
-        setUserCoordinates({ latitude, longitude });
-        setLocation(`Current location (${latitude}, ${longitude})`);
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        setLocationError(
-          "Could not get your current location. You can choose a location directly on the map."
-        );
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
-  };
-
   const handleMapLocationPicked = (lat: number, lng: number) => {
     const latitude = lat.toFixed(6);
     const longitude = lng.toFixed(6);
     setUserCoordinates({ latitude, longitude });
-    setLocation(`Selected location (${latitude}, ${longitude})`);
-    setLocationError(null);
   };
 
   // Search medications as user types
@@ -270,7 +241,7 @@ export function HeroSearch() {
           medication_id: selectedMedication.id,
           latitude: parseFloat(userCoordinates.latitude),
           longitude: parseFloat(userCoordinates.longitude),
-          search_radius_km: 50,
+          search_radius_km: 2500,
           max_response_time_minutes: 2,
           requested_quantity: Math.max(parseInt(requestedQuantity, 10) || 1, 1),
         }),
@@ -360,18 +331,60 @@ export function HeroSearch() {
     return undefined;
   };
 
-  // Real-time updates: as soon as a pharmacist picks "available", "not
-  // available", or "substitute" on their dashboard, the backend pushes a
-  // "new_response" event over SSE. We use that (instead of polling every
-  // 5s) to close the waiting box immediately and tell the patient exactly
-  // which pharmacy (name + id) responded and with what.
+  // Apply results both after SSE connects and after every SSE event. Automatic
+  // replies from pharmacies without accounts can be created before the browser
+  // opens SSE, so the initial fetch prevents those replies from being missed.
+  const applyAlertResults = (result: any) => {
+    if (!result) return;
+    const pharmacies: PharmacyResponse[] = result.pharmacies || [];
+    setAlertResult((prev) =>
+      prev ? { ...prev, status: result.status || prev.status, pharmacies } : null,
+    );
+
+    const hasOffer = pharmacies.some((p) => p.response_type !== "unavailable");
+    const alertFinished = ["expired", "completed", "cancelled"].includes(result.status);
+    if (hasOffer || alertFinished) {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      setWaitingForResponses(false);
+      setStatusNote(
+        hasOffer
+          ? null
+          : "No pharmacy with enough stock could help. Try a smaller quantity or try again later.",
+      );
+    }
+
+    const justArrived = pharmacies.filter(
+      (p) => !seenPharmacyIdsRef.current.has(p.pharmacy_id),
+    );
+    pharmacies.forEach((p) => seenPharmacyIdsRef.current.add(p.pharmacy_id));
+    justArrived.forEach((p) => {
+      if (p.response_type === "available") {
+        toast({ title: "Medication available!", description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) has it in stock.` });
+      } else if (p.response_type === "substitute") {
+        toast({ title: "Alternative available", description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) suggested a substitute.` });
+      } else {
+        toast({ title: "Not available", description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) doesn't have it in stock.`, variant: "destructive" });
+      }
+    });
+  };
+
+  // Real-time updates: pharmacist dashboard responses arrive through SSE.
   const listenForResponses = (alertId: number) => {
     console.log("[alert] connecting to SSE stream for alert", alertId, `${BASE_URL}/alerts/${alertId}/stream`);
     const eventSource = new EventSource(`${BASE_URL}/alerts/${alertId}/stream`);
     eventSourceRef.current = eventSource;
 
-    eventSource.onopen = () => {
+    eventSource.onopen = async () => {
       console.log("[alert] SSE connection OPEN for alert", alertId);
+      // The backend may have already auto-answered an unmanaged pharmacy
+      // before this EventSource existed; SSE does not replay missed events.
+      if (eventSourceRef.current === eventSource) {
+        const initialResult = await fetchAlertResults(alertId);
+        if (eventSourceRef.current === eventSource) applyAlertResults(initialResult);
+      }
     };
 
     eventSource.onmessage = async (event) => {
@@ -401,50 +414,7 @@ export function HeroSearch() {
 
       const result = await fetchAlertResults(alertId);
       if (!result) return;
-
-      const pharmacies: PharmacyResponse[] = result.pharmacies || [];
-      setAlertResult((prev) =>
-        prev
-          ? { ...prev, status: result.status || prev.status, pharmacies }
-          : null,
-      );
-
-      // Only an "available" / "substitute" answer ends the wait. An
-      // "unavailable" one just means the server moves to the next pharmacy.
-      const hasOffer = pharmacies.some((p) => p.response_type !== "unavailable");
-      if (hasOffer) {
-        if (countdownIntervalRef.current) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-        }
-        setWaitingForResponses(false);
-        setStatusNote(null);
-      }
-
-      const justArrived = pharmacies.filter(
-        (p) => !seenPharmacyIdsRef.current.has(p.pharmacy_id),
-      );
-      pharmacies.forEach((p) => seenPharmacyIdsRef.current.add(p.pharmacy_id));
-
-      justArrived.forEach((p) => {
-        if (p.response_type === "available") {
-          toast({
-            title: "Medication available!",
-            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) has it in stock.`,
-          });
-        } else if (p.response_type === "substitute") {
-          toast({
-            title: "Alternative available",
-            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) suggested a substitute.`,
-          });
-        } else {
-          toast({
-            title: "Not available",
-            description: `${p.pharmacy_name} (ID: ${p.pharmacy_id}) doesn't have it in stock.`,
-            variant: "destructive",
-          });
-        }
-      });
+      applyAlertResults(result);
     };
 
     eventSource.onerror = (err) => {
@@ -697,24 +667,6 @@ export function HeroSearch() {
           </p>
         )}
 
-        <div className="relative">
-          <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Your location"
-            className="pl-10 h-12 pr-24"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            className="absolute right-0 top-0 h-full px-3"
-            onClick={getUserLocation}
-          >
-            Use current
-          </Button>
-        </div>
-
         <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
@@ -740,22 +692,6 @@ export function HeroSearch() {
             Selected: {userCoordinates.latitude}, {userCoordinates.longitude}
           </p>
         </div>
-
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="h-auto p-0 text-teal-700"
-            onClick={getUserLocation}
-          >
-            Use my current location instead
-          </Button>
-        </div>
-
-        {locationError && (
-          <p className="text-sm text-red-500">{locationError}</p>
-        )}
 
         {searchType === "medication" && (
           <div className="flex items-center gap-3">
