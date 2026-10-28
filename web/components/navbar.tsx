@@ -3,9 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X, Search, User, ShoppingCart, Pill } from "lucide-react";
+import { Menu, Search, User, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PlatformSearchForm } from "@/components/platform-search-form";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSelector } from "@/components/language-selector";
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -175,21 +175,8 @@ export function Navbar() {
 
         <div className="flex shrink-0 items-center gap-2 ms-auto">
           {isSearchOpen ? (
-            <div className="relative flex items-center">
-              <Input
-                placeholder="Search..."
-                className="w-[200px] md:w-[300px] pr-8"
-                autoFocus
-                onBlur={() => setIsSearchOpen(false)}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-0"
-                onClick={() => setIsSearchOpen(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+            <div className="absolute inset-x-0 top-full border-b bg-background p-3 shadow-sm sm:static sm:w-[260px] sm:border-0 sm:p-0 sm:shadow-none">
+              <PlatformSearchForm autoFocus onClose={() => setIsSearchOpen(false)} />
             </div>
           ) : (
             <Button

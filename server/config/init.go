@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	DbUrl string
-	Port  string
+	DbUrl                 string
+	Port                  string
+	ApproximateTestAlerts bool
 }
 
 func Load() (*Config, error) {
@@ -17,7 +18,8 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return &Config{
-		DbUrl: os.Getenv("DB_URL"),
-		Port:  os.Getenv("PORT"),
+		DbUrl:                 os.Getenv("DB_URL"),
+		Port:                  os.Getenv("PORT"),
+		ApproximateTestAlerts: os.Getenv("QAYEN_ENABLE_APPROXIMATE_ALERTS") == "true",
 	}, nil
 }

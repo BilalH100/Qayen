@@ -22,14 +22,16 @@ type MedicationJson struct {
 }
 
 type Pharmacy struct {
-	Id        int32  `json:"id"`
-	Name      string `json:"name"`
-	City      string `json:"city"`
-	Latitude  string `json:"latitude"`
-	Longitude string `json:"longitude"`
-	Address   string `json:"address"`
-	Phone     string `json:"phone"`
-	Activity  string `json:"activity"`
+	Id                int32  `json:"id"`
+	Name              string `json:"name"`
+	City              string `json:"city"`
+	Latitude          string `json:"latitude"`
+	Longitude         string `json:"longitude"`
+	Address           string `json:"address"`
+	Phone             string `json:"phone"`
+	Activity          string `json:"activity"`
+	AddressSourceURL  string `json:"address_source_url,omitempty"`
+	LocationSourceURL string `json:"location_source_url,omitempty"`
 }
 
 type SeedingPharmacies struct {

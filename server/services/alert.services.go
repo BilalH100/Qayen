@@ -5,6 +5,7 @@ import (
 	"fmt"
 	sqlc "kayena/server/database/generated"
 	"log"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,16 +15,18 @@ import (
 )
 
 type AlertService struct {
-	db      *pgxpool.Pool
-	queries *sqlc.Queries
-	sseHub  *SSEHub
+	db              *pgxpool.Pool
+	queries         *sqlc.Queries
+	sseHub          *SSEHub
+	testApproximate bool
 }
 
 func NewAlertService(db *pgxpool.Pool, sseHub *SSEHub) *AlertService {
 	return &AlertService{
-		db:      db,
-		queries: sqlc.New(db),
-		sseHub:  sseHub,
+		db:              db,
+		queries:         sqlc.New(db),
+		sseHub:          sseHub,
+		testApproximate: os.Getenv("QAYEN_ENABLE_APPROXIMATE_ALERTS") == "true",
 	}
 }
 
@@ -63,6 +66,7 @@ type AlertResult struct {
 	Pharmacies        []PharmacyAvailability `json:"pharmacies"`
 	CreatedAt         time.Time              `json:"created_at"`
 	ExpiresAt         time.Time              `json:"expires_at"`
+	TestMode          bool                   `json:"test_mode,omitempty"`
 }
 
 type PharmacyAvailability struct {
@@ -78,6 +82,8 @@ type PharmacyAvailability struct {
 	SubstituteNotes   string  `json:"substitute_notes,omitempty"`
 	ResponseTime      int32   `json:"response_time_seconds"`
 	AvailableQuantity int32   `json:"available_quantity"`
+	EstimatedLocation bool    `json:"estimated_location,omitempty"`
+	TestInventory     bool    `json:"test_inventory,omitempty"`
 }
 
 // ConfirmPickupRequest represents a patient confirming they're taking a
@@ -263,6 +269,11 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 	}
 
 	log.Printf("Created medication alert with ID: %d", alert.ID)
+	if s.testApproximate {
+		if _, err = tx.Exec(ctx, `INSERT INTO catalog_test_alerts(alert_id) VALUES($1)`, alert.ID); err != nil {
+			return nil, err
+		}
+	}
 
 	// Remember how many units the patient needs.
 	if _, err = tx.Exec(ctx, `UPDATE medication_alerts SET requested_quantity = $2 WHERE id = $1`, alert.ID, req.RequestedQuantity); err != nil {
@@ -318,6 +329,7 @@ func (s *AlertService) CreateMedicationAlert(ctx context.Context, req AlertReque
 
 	result := &AlertResult{
 		AlertID:           updatedAlert.ID,
+		TestMode:          s.testApproximate,
 		MedicationID:      updatedAlert.MedicationID.Int32,
 		Status:            updatedAlert.Status,
 		RequestedQuantity: req.RequestedQuantity,
@@ -440,12 +452,12 @@ func (s *AlertService) SubmitPharmacistResponse(ctx context.Context, req Pharmac
 		s.logError(ctx, dbErr, "AlertID", req.AlertID)
 		return dbErr
 	}
-	if err = tx.QueryRow(ctx, `
+	if err = tx.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE((
 			SELECT s.quantity
-			FROM stock s
+			FROM %s s
 			WHERE s.pharmacy_id = $1 AND s.medication_id = $2
-		), 0)`, req.PharmacyID, alert.MedicationID.Int32).Scan(&availableQuantity); err != nil {
+		), 0)`, s.alertStockTable()), req.PharmacyID, alert.MedicationID.Int32).Scan(&availableQuantity); err != nil {
 		dbErr := NewDatabaseError(operation, "Failed to fetch pharmacy stock", err)
 		s.logError(ctx, dbErr, "AlertID", req.AlertID, "PharmacyID", req.PharmacyID)
 		return dbErr
@@ -607,7 +619,7 @@ func (s *AlertService) ConfirmPickup(ctx context.Context, req ConfirmPickupReque
 	}
 
 	// Atomic decrement: fails (no row) if there isn't enough stock.
-	stock, err := qtx.DecrementStockQuantity(ctx, sqlc.DecrementStockQuantityParams{
+	remainingStock, err := s.decrementAlertStock(ctx, tx, sqlc.DecrementStockQuantityParams{
 		PharmacyID:   pgtype.Int4{Int32: req.PharmacyID, Valid: true},
 		MedicationID: alert.MedicationID,
 		Quantity:     req.Quantity,
@@ -643,7 +655,7 @@ func (s *AlertService) ConfirmPickup(ctx context.Context, req ConfirmPickupReque
 	}
 
 	log.Printf("Pickup confirmed - AlertID: %d, PharmacyID: %d, Quantity: %d, RemainingStock: %d",
-		req.AlertID, req.PharmacyID, req.Quantity, stock.Quantity)
+		req.AlertID, req.PharmacyID, req.Quantity, remainingStock)
 
 	// Let the customer's other open tabs (if any) know the alert is resolved.
 	notifyErr := s.notifyCustomerOfResponse(ctx, alert.CustomerID.Int32, req.AlertID)
@@ -656,13 +668,22 @@ func (s *AlertService) ConfirmPickup(ctx context.Context, req ConfirmPickupReque
 		AlertID:        req.AlertID,
 		PharmacyID:     req.PharmacyID,
 		QuantityTaken:  req.Quantity,
-		RemainingStock: stock.Quantity,
+		RemainingStock: remainingStock,
 	}, nil
 }
 
 // GetAlertResults retrieves all current responses for an alert
 func (s *AlertService) GetAlertResults(ctx context.Context, alertID int32, customerLat, customerLng float64) (*AlertResult, error) {
 	const operation = "GetAlertResults"
+	if !s.testApproximate {
+		isTest, err := s.isRecordedTestAlert(ctx, alertID)
+		if err != nil {
+			return nil, NewDatabaseError(operation, "Failed to check test alert mode", err)
+		}
+		if isTest {
+			return nil, NewBusinessLogicError(operation, "This test alert requires approximate-alert testing mode")
+		}
+	}
 
 	// Validation
 	if alertID <= 0 {
@@ -699,36 +720,45 @@ func (s *AlertService) GetAlertResults(ctx context.Context, alertID int32, custo
 		return nil, dbErr
 	}
 
-	// Get all responses with error handling
-	responses, err := s.queries.GetPharmacistResponsesForAlert(ctx, sqlc.GetPharmacistResponsesForAlertParams{
-		AlertID:   pgtype.Int4{Int32: alertID, Valid: true},
-		Radians:   customerLat,
-		Radians_2: customerLng,
-	})
-	if err != nil {
-		dbErr := NewDatabaseError(operation, "Failed to fetch pharmacist responses", err)
-		s.logError(ctx, dbErr, "AlertID", alertID)
-		return nil, dbErr
-	}
-
-	log.Printf("Found %d responses for alert %d", len(responses), alertID)
-
-	pharmacies := make([]PharmacyAvailability, len(responses))
-	for i, resp := range responses {
-		pharmacies[i] = PharmacyAvailability{
-			PharmacyID:        resp.PharmacyID.Int32,
-			PharmacyName:      resp.PharmacyName,
-			PharmacyAddress:   resp.PharmacyAddress,
-			PharmacyPhone:     resp.PharmacyPhone,
-			Latitude:          resp.PharmacyLatitude.Float64,
-			Longitude:         resp.PharmacyLongitude.Float64,
-			DistanceKM:        float64(resp.DistanceKm),
-			ResponseType:      resp.ResponseType,
-			SubstituteBrand:   resp.SubstituteBrand.String,
-			SubstituteNotes:   resp.SubstituteNotes.String,
-			ResponseTime:      resp.ResponseTimeSeconds.Int32,
-			AvailableQuantity: resp.AvailableQuantity.Int32, // 0 when no stock row exists
+	var pharmacies []PharmacyAvailability
+	if s.testApproximate {
+		pharmacies, err = s.testAvailability(ctx, alertID, customerLat, customerLng)
+		if err != nil {
+			return nil, NewDatabaseError(operation, "Failed to fetch test responses", err)
 		}
+	} else {
+		// Get all responses with error handling
+		responses, err := s.queries.GetPharmacistResponsesForAlert(ctx, sqlc.GetPharmacistResponsesForAlertParams{
+			AlertID:   pgtype.Int4{Int32: alertID, Valid: true},
+			Radians:   customerLat,
+			Radians_2: customerLng,
+		})
+		if err != nil {
+			dbErr := NewDatabaseError(operation, "Failed to fetch pharmacist responses", err)
+			s.logError(ctx, dbErr, "AlertID", alertID)
+			return nil, dbErr
+		}
+
+		log.Printf("Found %d responses for alert %d", len(responses), alertID)
+
+		pharmacies = make([]PharmacyAvailability, len(responses))
+		for i, resp := range responses {
+			pharmacies[i] = PharmacyAvailability{
+				PharmacyID:        resp.PharmacyID.Int32,
+				PharmacyName:      resp.PharmacyName,
+				PharmacyAddress:   resp.PharmacyAddress,
+				PharmacyPhone:     resp.PharmacyPhone,
+				Latitude:          resp.PharmacyLatitude.Float64,
+				Longitude:         resp.PharmacyLongitude.Float64,
+				DistanceKM:        float64(resp.DistanceKm),
+				ResponseType:      resp.ResponseType,
+				SubstituteBrand:   resp.SubstituteBrand.String,
+				SubstituteNotes:   resp.SubstituteNotes.String,
+				ResponseTime:      resp.ResponseTimeSeconds.Int32,
+				AvailableQuantity: resp.AvailableQuantity.Int32, // 0 when no stock row exists
+			}
+		}
+
 	}
 
 	var requestedQty int32 = 1
@@ -736,6 +766,7 @@ func (s *AlertService) GetAlertResults(ctx context.Context, alertID int32, custo
 
 	result := &AlertResult{
 		AlertID:           alert.ID,
+		TestMode:          s.testApproximate,
 		MedicationID:      alert.MedicationID.Int32,
 		Status:            alert.Status,
 		RequestedQuantity: requestedQty,
@@ -806,7 +837,7 @@ func (s *AlertService) GetPharmacyDashboardAlerts(ctx context.Context, pharmacyI
 		return nil, err
 	}
 
-	rows, err := s.queries.GetPharmacyDashboardAlerts(ctx, pgtype.Int4{Int32: pharmacyID, Valid: true})
+	rows, err := s.dashboardRows(ctx, pharmacyID)
 	if err != nil {
 		dbErr := NewDatabaseError(operation, "Failed to fetch pharmacy dashboard alerts", err)
 		s.logError(ctx, dbErr, "PharmacyID", pharmacyID)
@@ -901,7 +932,7 @@ func (s *AlertService) notifyNextPharmacy(ctx context.Context, q dbQuerier, aler
 	}
 
 	var pharmacyID int32
-	err = q.QueryRow(ctx, `
+	err = q.QueryRow(ctx, fmt.Sprintf(`
 		SELECT id FROM (
 			SELECT p.id,
 			  6371 * acos(LEAST(1.0, GREATEST(-1.0,
@@ -909,15 +940,15 @@ func (s *AlertService) notifyNextPharmacy(ctx context.Context, q dbQuerier, aler
 			    cos(radians(p.longitude) - radians($2::float8)) +
 			    sin(radians($1::float8)) * sin(radians(p.latitude))
 			  ))) AS dist
-			FROM pharmacies p
+			FROM %s p
 			WHERE p.latitude IS NOT NULL AND p.longitude IS NOT NULL
 			  AND NOT EXISTS (
 			    SELECT 1 FROM pharmacy_alert_notifications n
 			    WHERE n.alert_id = $4 AND n.pharmacy_id = p.id)
 		) t
 		WHERE dist <= $3
-		ORDER BY dist ASC
-		LIMIT 1`, lat, lng, radius, alertID).Scan(&pharmacyID)
+		ORDER BY dist ASC, id ASC
+		LIMIT 1`, s.alertLocationTable()), lat, lng, radius, alertID).Scan(&pharmacyID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, false, nil
@@ -975,15 +1006,15 @@ func (s *AlertService) dispatchPharmacyAlert(ctx context.Context, pharmacyID, al
 // available; otherwise unavailable immediately advances to the next pharmacy.
 func (s *AlertService) processUnmanagedPharmacy(ctx context.Context, pharmacyID, alertID, medicationID int32) error {
 	var requestedQuantity, availableQuantity int32
-	if err := s.db.QueryRow(ctx, `
+	if err := s.db.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COALESCE(ma.requested_quantity, 1),
 			COALESCE((
 				SELECT st.quantity
-				FROM stock st
+				FROM %s st
 				WHERE st.pharmacy_id = $2 AND st.medication_id = $3
 			), 0)
 		FROM medication_alerts ma
-		WHERE ma.id = $1`, alertID, pharmacyID, medicationID).Scan(&requestedQuantity, &availableQuantity); err != nil {
+		WHERE ma.id = $1`, s.alertStockTable()), alertID, pharmacyID, medicationID).Scan(&requestedQuantity, &availableQuantity); err != nil {
 		return err
 	}
 

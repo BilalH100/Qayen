@@ -18,6 +18,7 @@ import { MedicationCard } from "@/components/medication-card";
 import { useEffect, useState, use } from "react";
 import { BASE_URL } from "@/utils/api";
 import { isMedicationAvailable } from "@/utils/types";
+import { MedicationReferencePanel, type MedicationReference } from "@/components/medication-reference-panel";
 
 interface Medication {
   id: number;
@@ -41,6 +42,7 @@ interface Medication {
   common_sd: string[];
   serious_sd: string[];
   general_info: string[];
+  references?: MedicationReference[];
 }
 
 interface Pharmacy {
@@ -61,9 +63,9 @@ interface PharmacyWithDistance {
 }
 
 interface MedicationPageProps {
-  params: {
+  params: Promise<{
     slug: string;
-  };
+  }>;
 }
 
 export default function MedicationPage({ params }: MedicationPageProps) {
@@ -269,10 +271,10 @@ export default function MedicationPage({ params }: MedicationPageProps) {
             {medication.pp && (
               <div className="text-sm">
                 <span className="font-medium text-slate-700 dark:text-slate-300">
-                  Public Price:
+                  Product Type:
                 </span>
                 <span className="ml-2 text-slate-600 dark:text-slate-400">
-                  {medication.pp} DZD
+                  {medication.pp}
                 </span>
               </div>
             )}
@@ -282,7 +284,7 @@ export default function MedicationPage({ params }: MedicationPageProps) {
                   Sale Price:
                 </span>
                 <span className="ml-2 text-slate-600 dark:text-slate-400">
-                  {medication.ppv} DZD
+                  {medication.ppv} MAD
                 </span>
               </div>
             )}
@@ -292,11 +294,12 @@ export default function MedicationPage({ params }: MedicationPageProps) {
                   Hospital Price:
                 </span>
                 <span className="ml-2 text-slate-600 dark:text-slate-400">
-                  {medication.ph} DZD
+                  {medication.ph} MAD
                 </span>
               </div>
             )}
           </div>
+          <MedicationReferencePanel references={medication.references ?? []} />
         </div>
       </div>
 

@@ -27,7 +27,7 @@ interface PharmacyStats {
   availability_rate: number;
 }
 
-export default function PharmacistDashboard({ params }: { params: { id: string } }) {
+export default function PharmacistDashboard({ params }: { params: Promise<{ id: string }> }) {
   const pharmacyId = use(params).id;
   const [alerts, setAlerts] = useState<MedicationAlert[]>([]);
   const [stats, setStats] = useState<PharmacyStats>({

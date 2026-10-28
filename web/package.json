@@ -7,6 +7,8 @@
     "dev": "next dev",
     "lint": "next lint",
     "test:translations": "node --test tests/translation.test.cjs",
+    "test:maps": "node --test tests/pharmacy-location.test.cjs",
+    "test:accounts": "node --test tests/remembered-accounts.test.cjs",
     "start": "next start"
   },
   "dependencies": {

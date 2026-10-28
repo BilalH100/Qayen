@@ -14,14 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/auth-context";
+import { forgetAccountEmail, readRememberedAccounts, SAVED_ACCOUNTS_CHANGED, SAVED_ACCOUNTS_KEY } from "@/lib/remembered-accounts";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: "login" | "register";
 }
-
-const SAVED_ACCOUNTS_KEY = "kayena_saved_accounts";
 
 export function AuthModal({
   isOpen,
@@ -64,67 +63,22 @@ export function AuthModal({
   }, [isOpen, initialMode]);
 
   const loadSavedAccounts = () => {
-    try {
-      const saved = localStorage.getItem(SAVED_ACCOUNTS_KEY);
-
-      if (saved) {
-        const accounts = JSON.parse(saved);
-
-        if (Array.isArray(accounts)) {
-          setSavedAccounts(accounts);
-        } else {
-          setSavedAccounts([]);
-        }
-      } else {
-        setSavedAccounts([]);
-      }
-    } catch (error) {
-      console.error("Error loading saved accounts:", error);
-      setSavedAccounts([]);
-    }
+    setSavedAccounts(readRememberedAccounts());
   };
 
-  const rememberAccount = (email: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanEmail) return;
-
-    try {
-      const existing = localStorage.getItem(SAVED_ACCOUNTS_KEY);
-
-      let accounts: string[] = [];
-
-      if (existing) {
-        const parsed = JSON.parse(existing);
-
-        if (Array.isArray(parsed)) {
-          accounts = parsed.filter(
-            (account): account is string => typeof account === "string"
-          );
-        }
-      }
-
-      // Remove duplicate of this email
-      accounts = accounts.filter(
-        (account) => account.toLowerCase() !== cleanEmail
-      );
-
-      // Put the most recently used account first
-      accounts.unshift(cleanEmail);
-
-      // Keep maximum 5 remembered accounts
-      accounts = accounts.slice(0, 5);
-
-      localStorage.setItem(
-        SAVED_ACCOUNTS_KEY,
-        JSON.stringify(accounts)
-      );
-
-      setSavedAccounts(accounts);
-    } catch (error) {
-      console.error("Error saving account:", error);
-    }
-  };
+  useEffect(() => {
+    if (!isOpen) return;
+    const reload = () => setSavedAccounts(readRememberedAccounts());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SAVED_ACCOUNTS_KEY || event.key === null) reload();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(SAVED_ACCOUNTS_CHANGED, reload);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(SAVED_ACCOUNTS_CHANGED, reload);
+    };
+  }, [isOpen]);
 
   const removeSavedAccount = (
     email: string,
@@ -132,20 +86,11 @@ export function AuthModal({
   ) => {
     event.stopPropagation();
 
-    const updatedAccounts = savedAccounts.filter(
-      (account) => account.toLowerCase() !== email.toLowerCase()
-    );
-
-    setSavedAccounts(updatedAccounts);
-
-    try {
-      localStorage.setItem(
-        SAVED_ACCOUNTS_KEY,
-        JSON.stringify(updatedAccounts)
-      );
-    } catch (error) {
-      console.error("Error removing saved account:", error);
+    if (!forgetAccountEmail(email)) {
+      setError("Your browser could not update saved accounts.");
+      return;
     }
+    loadSavedAccounts();
 
     // If the removed account is currently selected, clear the email
     if (formData.email.toLowerCase() === email.toLowerCase()) {
@@ -189,9 +134,6 @@ export function AuthModal({
     try {
       if (mode === "login") {
         await login(formData.email, formData.password);
-
-        // Remember the email only after successful login
-        rememberAccount(formData.email);
       } else {
         await register(
           formData.email,
@@ -199,9 +141,6 @@ export function AuthModal({
           formData.name,
           formData.phone
         );
-
-        // Remember the email after successful registration
-        rememberAccount(formData.email);
       }
 
       setFormData({
@@ -271,7 +210,7 @@ export function AuthModal({
             <div className="space-y-2">
               <Label>Choose an account</Label>
 
-              <div className="space-y-2">
+              <div className="max-h-48 space-y-2 overflow-y-auto">
                 {savedAccounts.map((email) => (
                   <div
                     key={email}
@@ -281,17 +220,16 @@ export function AuthModal({
                         ? "border-teal-600 bg-teal-50"
                         : "border-gray-200 hover:bg-gray-50"
                     }`}
-                    onClick={() => selectSavedAccount(email)}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => selectSavedAccount(email)} disabled={isLoading}>
                       <div className="h-8 w-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold">
                         {email.charAt(0).toUpperCase()}
                       </div>
 
-                      <span className="text-sm truncate">
+                      <span className="text-sm truncate" translate="no">
                         {email}
                       </span>
-                    </div>
+                    </button>
 
                     <Button
                       type="button"
@@ -354,6 +292,7 @@ export function AuthModal({
               id="email"
               name="email"
               type="email"
+              autoComplete="username"
               placeholder="john@example.com"
               value={formData.email}
               onChange={handleInputChange}
@@ -371,6 +310,7 @@ export function AuthModal({
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
                 placeholder="Enter your password"
                 value={formData.password}
                 onChange={handleInputChange}

@@ -19,7 +19,14 @@ var DbConn *pgxpool.Pool
 var err error
 
 func ConnectDb(c *config.Config) (*pgxpool.Pool, error) {
-	DbConn, err = pgxpool.New(context.Background(), c.DbUrl)
+	poolConfig, parseErr := pgxpool.ParseConfig(c.DbUrl)
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	if c.ApproximateTestAlerts {
+		poolConfig.ConnConfig.RuntimeParams["qayen.test_alerts"] = "on"
+	}
+	DbConn, err = pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -1,20 +1,23 @@
 import Link from "next/link";
-import { Package, Stethoscope, Store } from "lucide-react";
+import { Info, Mail, Package, Stethoscope, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const sectionIcons = {
   store: Store,
   package: Package,
   medical: Stethoscope,
+  info: Info,
+  mail: Mail,
 };
 
 interface CatalogPlaceholderProps {
   title: string;
   description: string;
   icon: keyof typeof sectionIcons;
+  message?: string;
 }
 
-export function CatalogPlaceholder({ title, description, icon }: CatalogPlaceholderProps) {
+export function CatalogPlaceholder({ title, description, icon, message = "We're preparing this section. Check back soon to discover the full catalog." }: CatalogPlaceholderProps) {
   const Icon = sectionIcons[icon];
 
   return (
@@ -30,7 +33,7 @@ export function CatalogPlaceholder({ title, description, icon }: CatalogPlacehol
         </div>
         <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Coming soon</h2>
         <p className="mt-3 max-w-md text-slate-600 dark:text-slate-300">
-          We're preparing this section. Check back soon to discover the full catalog.
+          {message}
         </p>
         <Button asChild variant="outline" className="mt-8">
           <Link href="/">Go Home</Link>

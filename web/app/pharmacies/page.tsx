@@ -8,8 +8,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useState, useEffect } from "react"
 import axios from "axios"
 import { BASE_URL } from "@/utils/api"
+import dynamic from "next/dynamic"
+
+const PharmacyDirectoryMap = dynamic(
+  () => import("@/components/pharmacy-directory-map").then(module => module.PharmacyDirectoryMap),
+  { ssr: false, loading: () => <p>Loading map...</p> },
+)
 
 interface Pharmacy {
+  id: number;
   name: string;
   city: string;
   latitude: string;
@@ -55,8 +62,8 @@ export default function PharmaciesPage() {
   useEffect(() => {
     const filtered = pharmacies.filter(pharmacy =>
       pharmacy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pharmacy.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pharmacy.city.toLowerCase().includes(searchTerm.toLowerCase())
+      (pharmacy.address || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (pharmacy.city || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredPharmacies(filtered);
     setCurrentPage(1); // Reset to first page when search changes
@@ -137,9 +144,8 @@ export default function PharmaciesPage() {
                   name={pharmacy.name}
                   image="/placeholder.svg?height=200&width=300"
                   address={pharmacy.address}
-                  rating={4.5} // Default rating since not in backend data
-                  openUntil="9:00 PM" // Default hours since not in backend data
-                  distance="N/A" // Would need user location to calculate
+                  city={pharmacy.city}
+                  href={`/pharmacies/${pharmacy.id}`}
                 />
               ))
             ) : (
@@ -152,9 +158,7 @@ export default function PharmaciesPage() {
           </div>
         </TabsContent>
         <TabsContent value="map">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg h-[600px] flex items-center justify-center">
-            <p className="text-slate-500 dark:text-slate-400">Map view would be displayed here</p>
-          </div>
+          <PharmacyDirectoryMap pharmacies={filteredPharmacies} referencePharmacies={pharmacies} />
         </TabsContent>
       </Tabs>
       {totalPages > 1 && (

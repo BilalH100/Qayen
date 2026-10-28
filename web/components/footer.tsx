@@ -11,7 +11,7 @@ export function Footer() {
               <div className="bg-teal-600 text-white p-1 rounded">
                 <Pill className="h-5 w-5" />
               </div>
-              <span className="font-bold text-xl text-white">Kayena</span>
+              <span className="font-bold text-xl text-white">Qayen</span>
             </Link>
             <p className="text-slate-400 mb-4">
               Find medications and pharmacies near you with real-time availability and pricing.
@@ -86,13 +86,13 @@ export function Footer() {
             <address className="not-italic text-slate-400 space-y-2">
               <p>123 Health Street</p>
               <p>New York, NY 10001</p>
-              <p>Email: info@Kayena.com</p>
+              <p>Email: info@Qayen.com</p>
               <p>Phone: (123) 456-7890</p>
             </address>
           </div>
         </div>
         <div className="border-t border-slate-800 mt-12 pt-6 text-center text-slate-400">
-          <p>&copy; {new Date().getFullYear()} Kayena. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Qayen. All rights reserved.</p>
         </div>
       </div>
     </footer>

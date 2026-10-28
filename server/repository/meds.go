@@ -22,10 +22,11 @@ type MedRepository interface {
 
 type sqlcMedRepo struct {
 	queries *sqlc.Queries
+	db      sqlc.DBTX
 }
 
 func NewMedRepo(db sqlc.DBTX) MedRepository {
-	return &sqlcMedRepo{queries: sqlc.New(db)}
+	return &sqlcMedRepo{queries: sqlc.New(db), db: db}
 }
 
 func (s *sqlcMedRepo) Create(ctx context.Context, med sqlc.CreateMedicationParams) error {
@@ -41,7 +42,7 @@ func (s *sqlcMedRepo) GetByID(ctx context.Context, id int32) (*models.Medication
 	if err != nil {
 		return nil, err
 	}
-	return &models.Medication{
+	result := &models.Medication{
 		ID:               med.ID,
 		Code:             med.Code,
 		Status:           med.Status,
@@ -63,7 +64,36 @@ func (s *sqlcMedRepo) GetByID(ctx context.Context, id int32) (*models.Medication
 		CommonSd:         med.CommonSd,
 		SeriousSd:        med.SeriousSd,
 		GeneralInfo:      med.GeneralInfo,
-	}, nil
+	}
+	result.References, err = s.getMedicationReferences(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *sqlcMedRepo) getMedicationReferences(ctx context.Context, id int32) ([]models.MedicationReference, error) {
+	var exists bool
+	if err := s.db.QueryRow(ctx, `SELECT to_regclass('medication_reference_entries') IS NOT NULL`).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+	rows, err := s.db.Query(ctx, `SELECT r.product_code,r.public_price::text,r.reimbursement_base::text,COALESCE(r.reimbursement_rate,''),s.filename,r.currency FROM medication_reference_entries r JOIN catalog_import_sources s ON s.id=r.source_id WHERE r.medication_id=$1 AND r.match_status='matched' ORDER BY r.product_code LIMIT 50`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var references []models.MedicationReference
+	for rows.Next() {
+		var item models.MedicationReference
+		if err = rows.Scan(&item.Code, &item.PublicPrice, &item.ReimbursementBase, &item.ReimbursementRate, &item.SourceFile, &item.Currency); err != nil {
+			return nil, err
+		}
+		references = append(references, item)
+	}
+	return references, rows.Err()
 }
 
 func (s *sqlcMedRepo) GetByCode(ctx context.Context, code string) (*models.Medication, error) {

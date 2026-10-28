@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { BASE_URL } from "@/utils/api";
+import { pharmacyCoordinates } from "@/lib/pharmacy-location";
 import dynamic from "next/dynamic";
 
 const LocationMapPicker = dynamic(
@@ -60,6 +61,8 @@ interface PharmacyResponse {
   substitute_brand?: string;
   substitute_notes?: string;
   available_quantity: number;
+  estimated_location?: boolean;
+  test_inventory?: boolean;
 }
 
 interface AlertResult {
@@ -662,8 +665,9 @@ export function HeroSearch() {
 
         {searchType === "pharmacy" && selectedPharmacy && (
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            <strong>{selectedPharmacy.name}</strong> — {selectedPharmacy.address}
+            <strong>{selectedPharmacy.name}</strong> — {selectedPharmacy.address || "Exact address awaiting confirmation"}
             {selectedPharmacy.phone ? ` • ${selectedPharmacy.phone}` : ""}
+            {!pharmacyCoordinates(selectedPharmacy) && <span className="block">Location awaiting confirmation</span>}
           </p>
         )}
 
@@ -814,6 +818,8 @@ export function HeroSearch() {
                             <p className="text-sm text-slate-500">
                               {pharmacy.distance_km.toFixed(1)} km away
                             </p>
+                            {pharmacy.estimated_location && <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Testing: approximate city-area location</p>}
+                            {pharmacy.test_inventory && <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Simulated test stock</p>}
                           </div>
                           <Badge
                             variant={pharmacy.response_type === 'unavailable' ? 'secondary' : 'default'}
@@ -856,6 +862,7 @@ export function HeroSearch() {
                             <Button 
                               size="sm" 
                               variant="outline"
+                              disabled={pharmacy.estimated_location}
                               onClick={() => window.open(
                                 `https://maps.google.com?q=${pharmacy.latitude},${pharmacy.longitude}`,
                                 '_blank'

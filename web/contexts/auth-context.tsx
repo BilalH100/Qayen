@@ -5,6 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { BASE_URL } from "@/utils/api";
 import { ROLES } from "@/utils/types";
+import { rememberAccountEmail } from "@/lib/remembered-accounts";
 interface User {
   id: string;
   email: string;
@@ -69,8 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
+        const accountRemembered = rememberAccountEmail(userData.email || email);
         setUser(userData);
         toast.success(`Welcome back, ${userData.name}!`);
+        if (!accountRemembered) {
+          toast.message("Signed in, but your browser could not remember this account.");
+        }
       } else {
         throw new Error("Invalid response format");
       }

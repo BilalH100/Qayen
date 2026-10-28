@@ -13,7 +13,7 @@ import type { Metadata } from "next"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Kayena - Find Medications & Pharmacies",
+  title: "Qayen - Find Medications & Pharmacies",
   description: "Find medications and pharmacies near you with real-time availability and pricing.",
     generator: 'v0.dev'
 }

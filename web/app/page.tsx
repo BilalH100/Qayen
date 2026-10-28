@@ -4,7 +4,6 @@ import Link from "next/link"
 import Image from "next/image"
 import { MapPin, ArrowRight, Pill, User } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { PharmacyCard } from "@/components/pharmacy-card"
 import { MedicationCard } from "@/components/medication-card"
 import { HeroSearch } from "@/components/hero-search"
@@ -213,26 +212,6 @@ export default function Home() {
                 Get personalized recommendations based on your medication history and preferences.
               </p>
             </div>
-          </div>
-        </div>
-      </section>
-      <section className="py-16 bg-white dark:bg-slate-950">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Ready to find your medication?</h2>
-          <p className="text-lg text-slate-600 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
-            Join thousands of users who find the right medications at the best prices every day.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-teal-600 hover:bg-teal-700 text-white">
-              Find Medications
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-teal-600 text-teal-600 hover:bg-teal-50 dark:border-teal-400 dark:text-teal-400 dark:hover:bg-teal-950"
-            >
-              Locate Pharmacies
-            </Button>
           </div>
         </div>
       </section>

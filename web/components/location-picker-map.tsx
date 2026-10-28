@@ -1,9 +1,11 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
+import { approximatePharmacyAreas, pharmacyCoordinates } from "@/lib/pharmacy-location";
+import { ApproximatePharmacyAreas } from "@/components/approximate-pharmacy-areas";
 
 // Fix Leaflet's default marker icons when used with Next.js.
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -17,6 +19,7 @@ export interface MapPharmacy {
   id: number;
   name: string;
   address: string;
+  city?: string;
   latitude: string;
   longitude: string;
 }
@@ -61,21 +64,23 @@ function MapPositionController({
   lat,
   lng,
   target,
+  targetZoom,
 }: {
   lat: number;
   lng: number;
   target: [number, number] | null;
+  targetZoom: number;
 }) {
   const map = useMap();
 
   useEffect(() => {
     if (target) {
-      map.flyTo(target, 17, { duration: 1 });
+      map.flyTo(target, targetZoom, { duration: 1 });
     } else {
       map.setView([lat, lng]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lat, lng, target?.[0], target?.[1], map]);
+  }, [lat, lng, target?.[0], target?.[1], targetZoom, map]);
 
   return null;
 }
@@ -88,12 +93,14 @@ export function LocationMapPicker({
   selectedPharmacyId = null,
 }: LocationMapPickerProps) {
   const validPharmacies = pharmacies.filter(
-    (p) => Number.isFinite(parseFloat(p.latitude)) && Number.isFinite(parseFloat(p.longitude)),
+    (p) => pharmacyCoordinates(p) !== null,
   );
   const selected = validPharmacies.find((p) => p.id === selectedPharmacyId) || null;
+  const approximate = useMemo(() => approximatePharmacyAreas(pharmacies), [pharmacies]);
+  const selectedArea = approximate.find(area => area.pharmacies.some(p => p.id === selectedPharmacyId));
   const target: [number, number] | null = selected
     ? [parseFloat(selected.latitude), parseFloat(selected.longitude)]
-    : null;
+    : selectedArea?.point ?? null;
 
   const [markerPosition, setMarkerPosition] = useState<[number, number]>([
     initialLat,
@@ -119,6 +126,8 @@ export function LocationMapPicker({
   };
 
   return (
+    <div className="space-y-2">
+      {approximate.length > 0 && <p className="text-xs text-amber-800 dark:text-amber-300">Amber groups show approximate city areas, not exact pharmacy locations.</p>}
     <div className="h-72 w-full overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
       <MapContainer
         center={[initialLat, initialLng]}
@@ -131,7 +140,8 @@ export function LocationMapPicker({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <MapPositionController lat={initialLat} lng={initialLng} target={target} />
+        <MapPositionController lat={initialLat} lng={initialLng} target={target} targetZoom={selected ? 17 : 10} />
+        <ApproximatePharmacyAreas areas={approximate} selectedId={selectedPharmacyId} onUseArea={point => updateLocation(point[0], point[1])} />
 
         <Marker
           ref={markerRef}
@@ -163,6 +173,7 @@ export function LocationMapPicker({
 
         <MapClickHandler onLocationPicked={updateLocation} />
       </MapContainer>
+    </div>
     </div>
   );
 }

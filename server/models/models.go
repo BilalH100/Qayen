@@ -7,27 +7,37 @@ import (
 )
 
 type Medication struct {
-	ID               int32            `json:"id"`
-	Status           string           `json:"status"`
-	CommercialStatus string           `json:"commercial_status"`
-	Speciality       string           `json:"speciality"`
-	Dosage           string           `json:"dosage"`
-	Form             string           `json:"form"`
-	Presentation     string           `json:"presentation"`
-	Pp               string           `json:"pp"`
-	ActiveSubstance  string           `json:"active_substance"`
-	TherapeuticClass string           `json:"therapeutic_class"`
-	Epi              string           `json:"epi"`
-	Ppv              string           `json:"ppv"`
-	Ph               string           `json:"ph"`
-	Pfht             string           `json:"pfht"`
-	Code             string           `json:"code"`
-	Tva              string           `json:"tva"`
-	CreatedAt        pgtype.Timestamp `json:"created_at"`
-	Description      string           `json:"description"`
-	CommonSd         []string         `json:"common_sd"`
-	SeriousSd        []string         `json:"serious_sd"`
-	GeneralInfo      []string         `json:"general_info"`
+	ID               int32                 `json:"id"`
+	Status           string                `json:"status"`
+	CommercialStatus string                `json:"commercial_status"`
+	Speciality       string                `json:"speciality"`
+	Dosage           string                `json:"dosage"`
+	Form             string                `json:"form"`
+	Presentation     string                `json:"presentation"`
+	Pp               string                `json:"pp"`
+	ActiveSubstance  string                `json:"active_substance"`
+	TherapeuticClass string                `json:"therapeutic_class"`
+	Epi              string                `json:"epi"`
+	Ppv              string                `json:"ppv"`
+	Ph               string                `json:"ph"`
+	Pfht             string                `json:"pfht"`
+	Code             string                `json:"code"`
+	Tva              string                `json:"tva"`
+	CreatedAt        pgtype.Timestamp      `json:"created_at"`
+	Description      string                `json:"description"`
+	CommonSd         []string              `json:"common_sd"`
+	SeriousSd        []string              `json:"serious_sd"`
+	GeneralInfo      []string              `json:"general_info"`
+	References       []MedicationReference `json:"references,omitempty"`
+}
+
+type MedicationReference struct {
+	Code              string  `json:"code"`
+	PublicPrice       *string `json:"public_price"`
+	ReimbursementBase *string `json:"reimbursement_base"`
+	ReimbursementRate string  `json:"reimbursement_rate"`
+	SourceFile        string  `json:"source_file"`
+	Currency          string  `json:"currency"`
 }
 
 type Pharmacy struct {

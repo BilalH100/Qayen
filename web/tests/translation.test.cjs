@@ -39,7 +39,7 @@ test("labels handle whitespace, case, punctuation, French source text and contac
   assert.equal(copy.getUiTranslation("  Quantity   needed: ", "ar"), "الكمية المطلوبة:");
   assert.equal(copy.getUiTranslation("SEARCHING…", "ar"), "جارٍ البحث...");
   assert.equal(copy.getUiTranslation("Médicaments", "ar"), "الأدوية");
-  assert.equal(copy.getUiTranslation("Email: info@Kayena.com", "ar"), "البريد الإلكتروني: info@Kayena.com");
+  assert.equal(copy.getUiTranslation("Email: info@Qayen.com", "ar"), "البريد الإلكتروني: info@Qayen.com");
   assert.equal(copy.getUiTranslation("Phone: (123) 456-7890", "fr"), "Téléphone: (123) 456-7890");
   assert.equal(copy.getUiTranslation("0.8 miles", "ar"), "0.8 ميل");
   assert.equal(copy.getUiTranslation("9:00 PM", "ar"), "9:00 م");

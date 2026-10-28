@@ -110,7 +110,7 @@ export default function MedicationAlertSearch() {
   };
 
   // Try to get the user's real browser location as a starting point.
-  // This is only a convenience default — since Kayena's seeded pharmacies
+  // This is only a convenience default — since Qayen's seeded pharmacies
   // are currently all in Rabat, use the address search below to test
   // from anywhere else.
   useEffect(() => {
@@ -630,7 +630,7 @@ export default function MedicationAlertSearch() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Tip: Kayena's pharmacies are currently all in Rabat — search
+                  Tip: Qayen's pharmacies are currently all in Rabat — search
                   "Rabat, Morocco" above to test regardless of where you
                   actually are.
                 </p>

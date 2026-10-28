@@ -23,11 +23,13 @@ type PharmacyRepository interface {
 
 type sqlcPharmacyRepo struct {
 	queries *sqlc.Queries
+	db      sqlc.DBTX
 }
 
 func NewPharmacyRepo(db sqlc.DBTX) PharmacyRepository {
 	return &sqlcPharmacyRepo{
 		queries: sqlc.New(db),
+		db:      db,
 	}
 }
 
@@ -37,7 +39,7 @@ func (s *sqlcPharmacyRepo) GetById(ctx context.Context, id int32) (*schemas.Phar
 		return nil, wrap(err, "")
 	}
 
-	return &schemas.Pharmacy{
+	result := &schemas.Pharmacy{
 		Id:        res.ID,
 		Name:      res.Name,
 		City:      res.City,
@@ -45,7 +47,26 @@ func (s *sqlcPharmacyRepo) GetById(ctx context.Context, id int32) (*schemas.Phar
 		Longitude: utils.Float8ToString(res.Longitude),
 		Address:   res.Address,
 		Phone:     res.Phone,
-	}, nil
+	}
+	var exists bool
+	if err = s.db.QueryRow(ctx, `SELECT to_regclass('pharmacy_address_evidence') IS NOT NULL`).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if exists {
+		// Do not attach obsolete evidence after a pharmacist changes an address.
+		if err = s.db.QueryRow(ctx, `SELECT COALESCE((SELECT source_url FROM pharmacy_address_evidence WHERE pharmacy_id=$1 AND address=$2 ORDER BY applied_at DESC,id DESC LIMIT 1),'')`, id, res.Address).Scan(&result.AddressSourceURL); err != nil {
+			return nil, err
+		}
+	}
+	if err = s.db.QueryRow(ctx, `SELECT to_regclass('pharmacy_location_evidence') IS NOT NULL`).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if exists {
+		if err = s.db.QueryRow(ctx, `SELECT COALESCE((SELECT source_url FROM pharmacy_location_evidence WHERE pharmacy_id=$1 AND latitude=$2 AND longitude=$3 AND matched_address=$4 ORDER BY applied_at DESC,id DESC LIMIT 1),'')`, id, res.Latitude, res.Longitude, res.Address).Scan(&result.LocationSourceURL); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 func (s *sqlcPharmacyRepo) Create(ctx context.Context, p *schemas.Pharmacy) error {
