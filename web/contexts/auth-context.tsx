@@ -19,6 +19,8 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
+  updateProfile: (data: { name: string; phone: string }) => Promise<void>;
   register: (
     email: string,
     password: string,
@@ -54,6 +56,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  const completeLogin = (data: { token: string; user: User }) => {
+    if (!data.token || !data.user?.email) throw new Error("Invalid response format");
+    sessionStorage.setItem("token", data.token);
+    sessionStorage.setItem("user", JSON.stringify(data.user));
+    axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
+    const remembered = rememberAccountEmail(data.user.email);
+    setUser(data.user);
+    toast.success(`Welcome back, ${data.user.name}!`);
+    if (!remembered) toast.message("Signed in, but your browser could not remember this account.");
+  };
+
+  const loginWithGoogle = async (credential: string) => {
+    try {
+      const challenge = await axios.get(`${BASE_URL}/users/google/nonce`, { withCredentials: true });
+      const response = await axios.post(`${BASE_URL}/users/google/firebase`, { credential, nonce: challenge.data.nonce }, { withCredentials: true });
+      completeLogin(response.data);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || "Google sign-in failed. Please try again.");
+    }
+  };
+
   const login = async (email: string, password: string) => {
     try {
       const response = await axios.post(`${BASE_URL}/users/login`, {
@@ -61,24 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
 
-      if (response.data.token) {
-        const token = response.data.token;
-        const userData = response.data.user;
-
-        sessionStorage.setItem("token", token);
-        sessionStorage.setItem("user", JSON.stringify(userData));
-
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
-        const accountRemembered = rememberAccountEmail(userData.email || email);
-        setUser(userData);
-        toast.success(`Welcome back, ${userData.name}!`);
-        if (!accountRemembered) {
-          toast.message("Signed in, but your browser could not remember this account.");
-        }
-      } else {
-        throw new Error("Invalid response format");
-      }
+      completeLogin(response.data);
     } catch (error: any) {
       console.error("Login error:", error);
       throw new Error(error.response?.data?.message || "Login failed");
@@ -111,6 +117,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = async (data: { name: string; phone: string }) => {
+    try {
+      const token = sessionStorage.getItem("token");
+      if (!token) throw new Error("Please sign in again to edit your profile.");
+      const response = await axios.patch<User>(`${BASE_URL}/users/me`, data, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (sessionStorage.getItem("token") !== token) throw new Error("Please sign in again to edit your profile.");
+      sessionStorage.setItem("user", JSON.stringify(response.data));
+      setUser(response.data);
+      toast.success("Profile updated successfully.");
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || error.message || "Could not save your profile. Please try again.");
+    }
+  };
+
   const logout = () => {
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("user");
@@ -123,6 +145,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     isLoading,
     login,
+    loginWithGoogle,
+    updateProfile,
     register,
     logout,
     isAuthenticated,

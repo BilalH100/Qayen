@@ -1,5 +1,6 @@
 "use client";
 
+import { PickupRequests } from "@/components/pickup-requests";
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -435,6 +436,7 @@ export default function PharmacistDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <div className="container mx-auto px-4 py-8">
+        {pharmacy && <PickupRequests pharmacyId={pharmacy.id} />}
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">

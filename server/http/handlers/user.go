@@ -9,7 +9,6 @@ import (
 	"kayena/server/schemas"
 	"kayena/server/services"
 	"kayena/server/utils"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -67,8 +66,6 @@ func LoginHandler(s services.UserService) http.HandlerFunc {
 		}
 		user, err := s.GetUserProfileByEmail(r.Context(), req.Email)
 		if err == nil {
-			log.Println(req.Password)
-			log.Println(user.Password)
 			if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 				httpx.RespondWithJSON(w, http.StatusBadRequest, schemas.Message{
 					Message: "Invalid password",

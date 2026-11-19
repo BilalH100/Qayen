@@ -9,6 +9,9 @@ import (
 func AlertRoutes(alertHandler *handlers.AlertHandler) chi.Router {
 	r := chi.NewRouter()
 
+	r.Get("/pickups/my", alertHandler.ListPickups)
+	r.Get("/pickups/pharmacy/{pharmacyID}", alertHandler.ListPickups)
+	r.Post("/pickups/{pickupID}/collected", alertHandler.CollectPickup)
 	// Customer
 	r.Post("/", alertHandler.CreateMedicationAlert)
 	r.Get("/{id}/results", alertHandler.GetAlertResults)

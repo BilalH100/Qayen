@@ -8,6 +8,8 @@ import (
 )
 
 type UserService interface {
+	UpdateProfile(ctx context.Context, id int32, name, phone string) (*models.User, error)
+	GoogleLogin(ctx context.Context, subject, email, name string) (*models.User, error)
 	GetUserProfile(ctx context.Context, id int32) (*models.User, error)
 	GetUserProfileByEmail(ctx context.Context, email string) (*models.User, error)
 	RegisterUser(ctx context.Context, user models.User) error
@@ -16,6 +18,14 @@ type UserService interface {
 	DeleteUser(ctx context.Context, id int32) error
 	UpdateUserRole(ctx context.Context, id int32, role models.Role) (*models.User, error)
 	UpdateUserPharmacy(ctx context.Context, userID int32, pharmacyId int32) (*models.User, error)
+}
+
+func (s *userService) UpdateProfile(ctx context.Context, id int32, name, phone string) (*models.User, error) {
+	return s.userRepo.UpdateProfile(ctx, id, name, phone)
+}
+
+func (s *userService) GoogleLogin(ctx context.Context, subject, email, name string) (*models.User, error) {
+	return s.userRepo.GoogleLogin(ctx, subject, email, name)
 }
 
 type userService struct {

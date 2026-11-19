@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { GoogleSignIn } from "@/components/google-sign-in";
 import { useAuth } from "@/contexts/auth-context";
 import { forgetAccountEmail, readRememberedAccounts, SAVED_ACCOUNTS_CHANGED, SAVED_ACCOUNTS_KEY } from "@/lib/remembered-accounts";
 
@@ -40,7 +41,20 @@ export function AuthModal({
     phone: "",
   });
 
-  const { login, register } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
+
+  const handleGoogleCredential = async (credential: string) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      await loginWithGoogle(credential);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Google sign-in failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Load previously used accounts whenever the login modal is opened
   useEffect(() => {
@@ -204,6 +218,11 @@ export function AuthModal({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          {isOpen && <GoogleSignIn onCredential={handleGoogleCredential} onError={setError} disabled={isLoading} onBusyChange={setIsLoading} />}
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="h-px flex-1 bg-border" /><span>Or continue with email</span><div className="h-px flex-1 bg-border" />
+          </div>
 
           {/* Previously used accounts */}
           {mode === "login" && savedAccounts.length > 0 && (

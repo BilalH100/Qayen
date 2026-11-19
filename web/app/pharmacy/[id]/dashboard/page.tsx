@@ -1,5 +1,6 @@
 "use client";
 
+import { PickupRequests } from "@/components/pickup-requests";
 import { useState, useEffect, use } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -142,6 +143,7 @@ export default function PharmacistDashboard({ params }: { params: Promise<{ id: 
   if (loading) {
     return (
       <div className="container mx-auto p-6">
+
         <div className="flex items-center justify-center h-64">
           <div className="text-lg">Loading dashboard...</div>
         </div>
@@ -151,6 +153,7 @@ export default function PharmacistDashboard({ params }: { params: Promise<{ id: 
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <PickupRequests pharmacyId={Number(pharmacyId)} />
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Pharmacist Dashboard</h1>
         <Badge variant="outline" className="text-lg px-3 py-1">

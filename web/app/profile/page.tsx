@@ -7,6 +7,11 @@ import { Separator } from "@/components/ui/separator";
 import { ProtectedRoute } from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import { User, Mail, Phone, Calendar, Settings } from "lucide-react";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function ProfilePage() {
   return (
@@ -17,7 +22,33 @@ export default function ProfilePage() {
 }
 
 function ProfileContent() {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [draft, setDraft] = useState({ name: "", phone: "" });
+
+  const openEditor = () => {
+    if (!user) return;
+    setDraft({ name: user.name ?? "", phone: user.phone ?? "" });
+    setError("");
+    setEditing(true);
+  };
+
+  const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await updateProfile({ name: draft.name.trim(), phone: draft.phone.trim() });
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save your profile. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -32,11 +63,40 @@ function ProfileContent() {
               Manage your account settings and preferences
             </p>
           </div>
-          <Button className="bg-teal-600 hover:bg-teal-700">
+          <Button className="bg-teal-600 hover:bg-teal-700" onClick={openEditor}>
             <Settings className="mr-2 h-4 w-4" />
             Edit Profile
           </Button>
         </div>
+
+        <Dialog open={editing} onOpenChange={open => { if (!saving) setEditing(open); }}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit Profile</DialogTitle>
+              <DialogDescription>Update your personal details.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={saveProfile} className="space-y-4">
+              {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
+              <div className="space-y-2">
+                <Label htmlFor="profile-name">Full Name</Label>
+                <Input id="profile-name" name="name" autoComplete="name" value={draft.name} onChange={event => setDraft(previous => ({ ...previous, name: event.target.value }))} maxLength={100} required disabled={saving} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="profile-email">Email</Label>
+                <Input id="profile-email" type="email" value={user.email} readOnly aria-describedby="profile-email-note" className="bg-muted" />
+                <p id="profile-email-note" className="text-sm text-muted-foreground">Your email is linked to your sign-in account.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="profile-phone">Phone Number</Label>
+                <Input id="profile-phone" name="phone" type="tel" autoComplete="tel" value={draft.phone} onChange={event => setDraft(previous => ({ ...previous, phone: event.target.value }))} maxLength={40} placeholder="+212 600 000 000" disabled={saving} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" disabled={saving} onClick={() => setEditing(false)}>Cancel</Button>
+                <Button type="submit" className="bg-teal-600 hover:bg-teal-700" disabled={saving || !draft.name.trim()}>{saving ? "Saving..." : "Save Changes"}</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Profile Card */}
         <Card>

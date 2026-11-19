@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, Search, User, ShoppingCart } from "lucide-react";
+import logo from "../public/LogoHomePage.png";
+import { Menu, Search, User, ShoppingCart, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { PlatformSearchForm } from "@/components/platform-search-form";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSelector } from "@/components/language-selector";
@@ -18,6 +20,7 @@ const navigationLinkClassName =
   "inline-flex items-center rounded-lg border border-teal-100 bg-teal-50/70 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-100 hover:text-teal-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-teal-700 dark:hover:bg-teal-950 dark:hover:text-teal-300";
 
 const catalogSections = [
+  { href: "/pharmacies", label: "Pharmacies" },
   { href: "/parapharmacies", label: "Parapharmacies" },
   { href: "/supplies-accessories", label: "Supplies & Accessories" },
   { href: "/medical-materials", label: "Medical Materials" },
@@ -40,40 +43,49 @@ export function Navbar() {
       <div className="container flex min-h-16 items-center">
         <Sheet>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="lg:hidden">
+            <Button variant="ghost" size="icon" className="xl:hidden">
               <Menu className="h-5 w-5" />
               <span className="sr-only">Toggle menu</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[300px] overflow-y-auto sm:w-[400px]">
             <nav className="mt-8 flex flex-col gap-2">
-              <Link href="/" className={navigationLinkClassName}>
-                Home
-              </Link>
-              <Link href="/medications" className={navigationLinkClassName}>
-                Medications
-              </Link>
-              <Link href="/pharmacies" className={navigationLinkClassName}>
-                Pharmacies
-              </Link>
-              {user?.role === ROLES.PHARMACIST && (
-                <Link href="/pharmacy" className={navigationLinkClassName}>
-                  Pharmacy Dashboard
-                </Link>
-              )}
-              {catalogSections.map(({ href, label }) => (
-                <SheetClose asChild key={href}>
-                  <Link href={href} className={navigationLinkClassName}>
-                    {label}
-                  </Link>
+              <SheetClose asChild>
+                <Link href="/" className={navigationLinkClassName}>Home</Link>
+              </SheetClose>
+              <SheetClose asChild>
+                <Link href="/medications" className={navigationLinkClassName}>Medications</Link>
+              </SheetClose>
+              <details className="group rounded-lg border border-teal-100 dark:border-slate-700">
+                <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg bg-teal-50/70 px-3 py-2 text-sm font-medium dark:bg-slate-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 [&::-webkit-details-marker]:hidden">
+                  More <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <div className="flex flex-col gap-1 p-2">
+                  {catalogSections.map(({ href, label }) => (
+                    <SheetClose asChild key={href}>
+                      <Link href={href} className={navigationLinkClassName}>{label}</Link>
+                    </SheetClose>
+                  ))}
+                </div>
+              </details>
+              <div className="mt-4 flex flex-col gap-2 border-t pt-4">
+                <SheetClose asChild>
+                  <Link href="/about" className={navigationLinkClassName}>About</Link>
                 </SheetClose>
-              ))}
-              <Link href="/about" className={navigationLinkClassName}>
-                About
-              </Link>
-              <Link href="/contact" className={navigationLinkClassName}>
-                Contact
-              </Link>
+                <SheetClose asChild>
+                  <Link href="/contact" className={navigationLinkClassName}>Contact</Link>
+                </SheetClose>
+                {user?.role === ROLES.PHARMACIST && (
+                  <SheetClose asChild>
+                    <Link href="/pharmacy" className={navigationLinkClassName}>Pharmacy Dashboard</Link>
+                  </SheetClose>
+                )}
+                {user?.role === ROLES.ADMIN && (
+                  <SheetClose asChild>
+                    <Link href="/admin" className={navigationLinkClassName}>Admin Dashboard</Link>
+                  </SheetClose>
+                )}
+              </div>
 
               <div className="mt-8 pt-4 border-t">
                 {isAuthenticated ? (
@@ -104,78 +116,51 @@ export function Navbar() {
           </SheetContent>
         </Sheet>
 
-        <Link href="/" className="flex shrink-0 items-center gap-2 me-4">
-          {/* <div className="bg-teal-600 text-white p-1 rounded">
-            <Image src={logo} alt={""} height={50} width={50}/>
-          </div> */}
-        <Image
-          src="/Logo_HomePage.png"
-          alt="Qayen"
-          width={100}
-          height={60}
-          priority
-          style={{ width: "70px", height: "60px" }}
-          className="object-contain"
-/>
+        <Link href="/" className="relative me-3 block h-14 w-36 shrink-0 overflow-hidden rounded-md sm:me-4 sm:w-40">
+          <Image
+            src={logo}
+            alt="Qayen"
+            fill
+            sizes="(min-width: 640px) 160px, 144px"
+            priority
+            className="object-cover mix-blend-multiply brightness-105"
+            style={{ objectPosition: "50% 40%" }}
+          />
         </Link>
 
-        <nav className="hidden min-w-0 flex-1 flex-wrap items-center gap-2 py-2 pe-3 lg:flex [&>a]:whitespace-nowrap">
-          <Link
-            href="/medications"
-            className={navigationLinkClassName}
-          >
-            Medications
-          </Link>
-
-          <Link
-            href="/pharmacies"
-            className={navigationLinkClassName}
-          >
-            Pharmacies
-          </Link>
-
-          {user?.role === ROLES.PHARMACIST && (
-            <Link
-              href="/pharmacy"
-              className={navigationLinkClassName}
-            >
-              Pharmacy Dashboard
-            </Link>
-          )}
-          {user?.role === ROLES.ADMIN && (
-            <Link
-              href="/admin"
-              className={navigationLinkClassName}
-            >
-              Admin Dashboard
-            </Link>
-          )}
-          {catalogSections.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className={navigationLinkClassName}
-            >
-              {label}
-            </Link>
-          ))}
-          <Link
-            href="/about"
-            className={navigationLinkClassName}
-          >
-            About
-          </Link>
-          <Link
-            href="/contact"
-            className={navigationLinkClassName}
-          >
-            Contact
-          </Link>
+        <nav className="hidden min-w-0 flex-1 items-center gap-2 py-2 pe-3 xl:flex">
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href="/medications" className={navigationLinkClassName}>Medications</Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className={`${navigationLinkClassName} gap-1.5 group`}>
+                  More <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-56">
+                {catalogSections.map(({ href, label }) => (
+                  <DropdownMenuItem key={href} asChild className={`${navigationLinkClassName} my-1 w-full cursor-pointer focus:bg-teal-100 focus:text-teal-900 dark:focus:bg-teal-950 dark:focus:text-teal-300`}>
+                    <Link href={href}>{label}</Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+            <Link href="/about" className={navigationLinkClassName}>About</Link>
+            <Link href="/contact" className={navigationLinkClassName}>Contact</Link>
+            {user?.role === ROLES.PHARMACIST && (
+              <Link href="/pharmacy" className={navigationLinkClassName}>Pharmacy Dashboard</Link>
+            )}
+            {user?.role === ROLES.ADMIN && (
+              <Link href="/admin" className={navigationLinkClassName}>Admin Dashboard</Link>
+            )}
+          </div>
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 ms-auto">
           {isSearchOpen ? (
-            <div className="absolute inset-x-0 top-full border-b bg-background p-3 shadow-sm sm:static sm:w-[260px] sm:border-0 sm:p-0 sm:shadow-none">
+            <div className="absolute inset-x-0 top-full border-b bg-background p-3 shadow-sm">
               <PlatformSearchForm autoFocus onClose={() => setIsSearchOpen(false)} />
             </div>
           ) : (

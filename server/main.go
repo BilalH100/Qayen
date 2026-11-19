@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"kayena/server/config"
 	"kayena/server/database"
 	"kayena/server/http/routes"
@@ -25,7 +26,12 @@ func main() {
 	if err != nil {
 		logger.Fatal("Connection to Db failed: ", err)
 	}
+	if err = database.EnsurePickupSchema(context.Background(), db); err != nil {
+		logger.Fatal("Pickup schema: ", err)
+	}
 	service := services.NewService(db)
+	go service.AlertService.RunPickupWorker(context.Background())
+	go service.AlertService.RunPickupEmailWorker(context.Background())
 	err = database.SeedDb(service, logger)
 	if err != nil {
 		logger.Fatal(err)

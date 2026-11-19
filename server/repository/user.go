@@ -9,6 +9,8 @@ import (
 )
 
 type UserRepository interface {
+	UpdateProfile(ctx context.Context, id int32, name, phone string) (*models.User, error)
+	GoogleLogin(ctx context.Context, subject, email, name string) (*models.User, error)
 	GetById(ctx context.Context, id int32) (*models.User, error)
 	Create(ctx context.Context, user *models.User) error
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
@@ -21,11 +23,13 @@ type UserRepository interface {
 
 type sqlcUserRepo struct {
 	queries *sqlc.Queries
+	db      sqlc.DBTX
 }
 
 func NewUserRepo(db sqlc.DBTX) UserRepository {
 	return &sqlcUserRepo{
 		queries: sqlc.New(db),
+		db:      db,
 	}
 }
 

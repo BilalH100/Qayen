@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/contexts/auth-context"
 import { AutoTranslationProvider } from "@/contexts/auto-translation-context"
+import { PatientPickupRequests } from "@/components/pickup-requests"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Toaster } from "@/components/ui/sonner"
@@ -31,7 +32,7 @@ export default function RootLayout({
             <AuthProvider>
               <div className="flex min-h-screen flex-col">
                 <Navbar />
-                <main className="flex-1">{children}</main>
+                <main className="flex-1"><PatientPickupRequests />{children}</main>
                 <Footer />
               </div>
               <Toaster />

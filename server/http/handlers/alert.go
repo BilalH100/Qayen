@@ -210,6 +210,11 @@ func (h *AlertHandler) ConfirmPickup(w http.ResponseWriter, r *http.Request) {
 
 	// Set alert ID from URL parameter (never trust a mismatched body value)
 	req.AlertID = int32(alertID)
+	userID, authorized := pickupUser(w, r)
+	if !authorized {
+		return
+	}
+	req.CustomerID = userID
 
 	if req.PharmacyID <= 0 {
 		utils.ErrorResponse(w, http.StatusBadRequest, "Valid pharmacy ID is required")

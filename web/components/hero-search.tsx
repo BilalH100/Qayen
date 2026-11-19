@@ -460,7 +460,7 @@ export function HeroSearch() {
         `${BASE_URL}/alerts/${alertResult.alert_id}/confirm`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionStorage.getItem("token") || ""}` },
           body: JSON.stringify({
             pharmacy_id: pharmacy.pharmacy_id,
             quantity,
@@ -470,8 +470,9 @@ export function HeroSearch() {
 
       if (response.ok) {
         setConfirmedPharmacyId(pharmacy.pharmacy_id);
+        window.dispatchEvent(new Event("qayen-pickups-changed"));
         toast({
-          title: "Pickup confirmed",
+          title: "Reserved for 5 minutes",
           description: `You're all set to pick up ${quantity} from ${pharmacy.pharmacy_name}.`,
         });
       } else {
@@ -875,7 +876,7 @@ export function HeroSearch() {
                             confirmedPharmacyId === pharmacy.pharmacy_id ? (
                               <div className="mt-3 flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
                                 <CheckCircle className="h-4 w-4" />
-                                Pickup confirmed
+                                Reserved — awaiting pickup
                               </div>
                             ) : (
                               <div className="mt-3 flex items-center gap-2">
@@ -903,7 +904,7 @@ export function HeroSearch() {
                                   {confirmingPharmacyId === pharmacy.pharmacy_id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    "Confirm & Take"
+                                    "Reserve for pickup"
                                   )}
                                 </Button>
                                 {pharmacy.available_quantity > 0 && (
