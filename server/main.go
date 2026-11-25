@@ -32,6 +32,7 @@ func main() {
 	service := services.NewService(db)
 	go service.AlertService.RunPickupWorker(context.Background())
 	go service.AlertService.RunPickupEmailWorker(context.Background())
+	go service.AlertService.RunPharmacistAlertEmailWorker(context.Background())
 	err = database.SeedDb(service, logger)
 	if err != nil {
 		logger.Fatal(err)

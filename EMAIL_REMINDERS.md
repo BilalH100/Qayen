@@ -28,3 +28,29 @@ Files added:
 Files changed:
 - `server/database/pickups.go`
 - `server/main.go`
+
+
+## Pharmacist alert emails
+
+Pharmacist notification emails use the same configured Gmail/SMTP sender. They are enabled alongside `EMAIL_REMINDERS_ENABLED=true`; optionally set `PHARMACIST_ALERT_EMAILS_ENABLED=false` to disable only these emails. Restart your usual backend after this code update; the new table is created automatically on startup.
+
+Recipients are pharmacist user accounts whose `managed_pharmacy_id` matches the pharmacy currently targeted by the sequential alert. The recipient must have a real working email address. Catalog pharmacies without a linked pharmacist account cannot receive email. Demo addresses such as `pharmacist@demo.com` are not a Gmail inbox.
+
+The email includes alert reference, medication name, dosage, form, ingredient, quantity, patient name and phone (when provided), and Morocco timestamps. Set optional `QAYEN_PUBLIC_URL` to your reachable frontend address for a clickable dashboard link. Patient email and GPS coordinates are not included.
+
+Test using separate patient and pharmacist sessions. Use a pharmacist account linked to a nearby pharmacy with an inbox you control, then create a patient alert near that pharmacy with a selected medication and quantity. The targeted pharmacist should receive an email promptly, alongside the existing platform alert. Do not answer immediately if testing email delivery. The existing 30-second response/escalation window remains in effect; email arrival speed depends on the provider. Patient pickup reminders remain at 3 and 4 minutes after reservation.
+
+Each targeted notification/account pair has one durable delivery job. SMTP failures retry every 5 seconds while that pharmacy still has an active unanswered alert. Completed, expired, responded, reassigned and old notifications are skipped. Email sending is separate from stock changes and patient reminders. SMTP acceptance cannot guarantee Inbox placement or exactly-once delivery after a rare acceptance/database-commit failure.
+
+Isolated PostgreSQL tests (fake mail only): set `EMAIL_TEST_DB_ENV=../.env`, then run `go test ./server/services -run TestPharmacistAlertEmail -count=1` from the repository root.
+
+Files added for pharmacist emails:
+- `server/database/migrations/20261125000000_add_pharmacist_alert_emails.sql`
+- `server/services/pharmacist_emails.go`
+- `server/services/pharmacist_emails_test.go`
+
+Files changed for pharmacist emails:
+- `server/database/pickups.go`
+- `server/main.go`
+- `server/email-reminders.env.example`
+- `EMAIL_REMINDERS.md`
