@@ -1,7 +1,19 @@
+"use client";
+
 import Link from "next/link"
+import { useAutoTranslation } from "@/contexts/auto-translation-context"
+import { contactCopy } from "@/components/contact-content"
 import { Pill, Facebook, Twitter, Instagram, Linkedin } from "lucide-react"
 
 export function Footer() {
+  const { language } = useAutoTranslation();
+  const t = contactCopy[language];
+  const footerAddress = {
+    en: ["2, Brahim Roudani St., Apt. 206", "10050 Kebibat, Rabat, Morocco"],
+    fr: ["2, rue Brahim Roudani, appt 206", "10050 Kebibat, Rabat, Maroc"],
+    ar: ["2، شارع إبراهيم الروداني، الشقة 206", "10050، القبيبات، الرباط، المغرب"],
+  }[language];
+  const contactLink = "inline-block max-w-full rounded text-slate-300 underline-offset-4 transition-colors hover:text-teal-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400";
   return (
     <footer className="bg-slate-950 text-slate-300">
       <div className="container mx-auto px-4 py-12">
@@ -81,13 +93,18 @@ export function Footer() {
               </li>
             </ul>
           </div>
-          <div>
-            <h3 className="font-semibold text-white mb-4">Contact</h3>
-            <address className="not-italic text-slate-400 space-y-2">
-              <p>123 Health Street</p>
-              <p>New York, NY 10001</p>
-              <p>Email: info@Qayen.com</p>
-              <p>Phone: (123) 456-7890</p>
+          <div translate="no" lang={language} dir={language === "ar" ? "rtl" : "ltr"}>
+            <h3 className="font-semibold text-white mb-4">{t.title}</h3>
+            <address className="not-italic text-sm text-slate-400 space-y-2">
+              <div className="leading-6">
+                {footerAddress.map(line => <p key={line}>{line}</p>)}
+              </div>
+              <p>
+                <a href="tel:+212688735709" className={contactLink}><bdi dir="ltr">+(212)0688735709</bdi></a>
+              </p>
+              <p>
+                <a href="mailto:QAYENsolutions@outlook.com" className={`${contactLink} break-all`}><bdi dir="ltr">QAYENsolutions@outlook.com</bdi></a>
+              </p>
             </address>
           </div>
         </div>

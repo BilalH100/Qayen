@@ -4,7 +4,7 @@ Both reminder emails go to the email address of the patient's Qayen account, inc
 
 ## Gmail setup
 
-1. Use a Gmail account as Qayen's sender. Enable Google 2-Step Verification and create an App Password: https://myaccount.google.com/apppasswords (some managed accounts restrict this).
+1. Use a Gmail account as Qayen's sender. Enable Google 2-Step Verification and create an App Password: [Google App Passwords](https://myaccount.google.com/apppasswords) (some managed accounts restrict this).
 2. Copy the settings from `server/email-reminders.env.example` into `server/.env`. Set `SMTP_USER` and `SMTP_FROM` to the sender address, and `SMTP_PASSWORD` to the sender's App Password without spaces. Do not use the normal Gmail password. Keep all credentials local; never commit or paste them into chat.
 3. Set `EMAIL_REMINDERS_ENABLED=true` and restart your normal Go backend. Startup should say `Pickup email reminders enabled`.
 4. Sign in as a patient with an inbox you control, reserve medication, and check email at 3 and 4 minutes. Test collection/expiry separately. Gmail may place messages in Spam; SMTP acceptance cannot guarantee Inbox placement.
@@ -18,17 +18,18 @@ The schema is initialized at backend startup, and the additive migration is also
 Validation: `go test ./server/...`; isolated PostgreSQL delivery tests: set `EMAIL_TEST_DB_ENV=../.env` and run `go test ./server/services -run TestPickupEmailDelivery -count=1` from the repository root. Those tests use temporary tables and a fake sender.
 
 Files added:
+
 - `server/database/migrations/20261111000000_add_pickup_email_reminders.sql`
 - `server/services/pickup_emails.go`
 - `server/services/reminder_smtp.go`
 - `server/services/pickup_emails_test.go`
-- `server/email-reminders.env.example`x`
+- `server/email-reminders.env.example`
 - `EMAIL_REMINDERS.md`
 
 Files changed:
+
 - `server/database/pickups.go`
 - `server/main.go`
-
 
 ## Pharmacist alert emails
 
@@ -45,11 +46,13 @@ Each targeted notification/account pair has one durable delivery job. SMTP failu
 Isolated PostgreSQL tests (fake mail only): set `EMAIL_TEST_DB_ENV=../.env`, then run `go test ./server/services -run TestPharmacistAlertEmail -count=1` from the repository root.
 
 Files added for pharmacist emails:
+
 - `server/database/migrations/20261125000000_add_pharmacist_alert_emails.sql`
 - `server/services/pharmacist_emails.go`
 - `server/services/pharmacist_emails_test.go`
 
 Files changed for pharmacist emails:
+
 - `server/database/pickups.go`
 - `server/main.go`
 - `server/email-reminders.env.example`
