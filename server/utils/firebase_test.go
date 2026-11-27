@@ -58,6 +58,26 @@ func TestFirebaseGoogleVerifier(t *testing.T) {
 			}
 		})
 	}
+	// Small real-world clock differences should not reject a fresh Google login.
+	for _, seconds := range []int{1, 5, 20} {
+		claims := base
+		claims.IssuedAt = jwt.NewNumericDate(time.Now().Add(time.Duration(seconds) * time.Second))
+		claims.AuthTime = claims.IssuedAt.Unix()
+		if _, e := verifier.VerifyFirebase(context.Background(), sign(claims), "qayen-2c858"); e != nil {
+			t.Fatalf("small clock difference rejected: %v", e)
+		}
+	}
+	claimsBeyondTolerance := base
+	claimsBeyondTolerance.IssuedAt = jwt.NewNumericDate(time.Now().Add(60 * time.Second))
+	claimsBeyondTolerance.AuthTime = claimsBeyondTolerance.IssuedAt.Unix()
+	if _, e := verifier.VerifyFirebase(context.Background(), sign(claimsBeyondTolerance), "qayen-2c858"); e == nil {
+		t.Fatal("large future clock difference accepted")
+	}
+	claimsExpired := base
+	claimsExpired.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Minute))
+	if _, e := verifier.VerifyFirebase(context.Background(), sign(claimsExpired), "qayen-2c858"); e == nil {
+		t.Fatal("expired token accepted")
+	}
 	bad := jwt.NewWithClaims(jwt.SigningMethodHS256, base)
 	bad.Header["kid"] = "test"
 	raw, _ := bad.SignedString([]byte("forged"))

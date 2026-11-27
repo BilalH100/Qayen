@@ -93,4 +93,33 @@ func TestFirebaseNetworkLogin(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("project mismatch gives actionable configuration error", func(t *testing.T) {
+		t.Setenv("FIREBASE_PROJECT_ID", "other-project")
+		body, _ := json.Marshal(map[string]string{"credential": credential, "nonce": nonce})
+		req := httptest.NewRequest("POST", "/api/v1/users/google/firebase", strings.NewReader(string(body)))
+		req.Header.Set("Origin", "http://192.168.3.114:3000")
+		req.AddCookie(&http.Cookie{Name: googleNonceCookie, Value: nonce})
+		w := httptest.NewRecorder()
+		handler(w, req)
+		if w.Code != 503 || !strings.Contains(w.Body.String(), "configuration does not match") {
+			t.Fatalf("unexpected failure: %d %s", w.Code, w.Body.String())
+		}
+	})
+	t.Run("certificate outage is a temporary service error", func(t *testing.T) {
+		offline := utils.NewFirebaseVerifier()
+		offline.Client = &http.Client{Transport: firebaseRoundTripper(func(*http.Request) (*http.Response, error) { return nil, io.ErrUnexpectedEOF })}
+		body, _ := json.Marshal(map[string]string{"credential": credential, "nonce": nonce})
+		req := httptest.NewRequest("POST", "/api/v1/users/google/firebase", strings.NewReader(string(body)))
+		req.Header.Set("Origin", "http://192.168.3.114:3000")
+		req.AddCookie(&http.Cookie{Name: googleNonceCookie, Value: nonce})
+		w := httptest.NewRecorder()
+		firebaseGoogleLoginHandler(users, offline)(w, req)
+		if w.Code != 503 || !strings.Contains(w.Body.String(), "temporarily unreachable") {
+			t.Fatalf("unexpected outage response: %d %s", w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), credential) || strings.Contains(w.Body.String(), "test@gmail.com") {
+			t.Fatal("credential or identity leaked")
+		}
+	})
 }

@@ -3,6 +3,10 @@ export type TranslationLanguage = "en" | "fr" | "ar";
 // Keep product copy local so common controls remain accurate even when the
 // automatic translation service is unavailable. English is the source of truth.
 export const UI_TRANSLATIONS: ReadonlyArray<readonly [string, string, string]> = [
+  ["Google verification is temporarily unreachable. Please try again shortly.", "La vérification Google est temporairement inaccessible. Réessayez dans un instant.", "تعذر الاتصال بخدمة التحقق من غوغل مؤقتًا. يرجى المحاولة بعد قليل."],
+  ["Google sign-in configuration does not match this website. Please contact support.", "La configuration de connexion Google ne correspond pas à ce site. Contactez l’assistance.", "إعدادات تسجيل الدخول باستخدام غوغل لا تتطابق مع هذا الموقع. يرجى التواصل مع الدعم."],
+  ["The server clock is out of sync. Please synchronize its date and time.", "L’horloge du serveur est décalée. Veuillez synchroniser sa date et son heure.", "ساعة الخادم غير متزامنة. يرجى ضبط التاريخ والوقت ومزامنتهما."],
+  ["Your Google session expired. Please try signing in again.", "Votre session Google a expiré. Essayez de vous reconnecter.", "انتهت صلاحية جلسة غوغل. يرجى تسجيل الدخول مجددًا."],
   ["More", "Plus", "المزيد"],
   ["Reserved for 5 minutes", "Réservé pendant 5 minutes", "محجوز لمدة خمس دقائق"],
   ["Reserve for pickup", "Réserver pour le retrait", "الحجز للاستلام"],

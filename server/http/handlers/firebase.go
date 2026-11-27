@@ -3,10 +3,12 @@ package handlers
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	httpx "kayena/server/http"
 	"kayena/server/schemas"
 	"kayena/server/services"
 	"kayena/server/utils"
+	"log"
 	"net/http"
 	"os"
 )
@@ -42,7 +44,22 @@ func firebaseGoogleLoginHandler(s services.UserService, verifier *utils.GoogleVe
 		}
 		claims, err := verifier.VerifyFirebase(r.Context(), body.Credential, projectID)
 		if err != nil {
-			httpx.RespondWithJSON(w, 401, schemas.Message{Message: "Google sign-in could not be verified. Please try again."})
+			log.Printf("Google/Firebase sign-in verification failed: reason=%s", utils.FirebaseVerificationReason(err))
+			status := http.StatusUnauthorized
+			message := "Google sign-in could not be verified. Please try again."
+			switch {
+			case errors.Is(err, utils.ErrGoogleCertificatesUnavailable):
+				status = http.StatusServiceUnavailable
+				message = "Google verification is temporarily unreachable. Please try again shortly."
+			case errors.Is(err, utils.ErrFirebaseProjectMismatch):
+				status = http.StatusServiceUnavailable
+				message = "Google sign-in configuration does not match this website. Please contact support."
+			case errors.Is(err, utils.ErrFirebaseClockSkew):
+				message = "The server clock is out of sync. Please synchronize its date and time."
+			case errors.Is(err, utils.ErrFirebaseTokenExpired):
+				message = "Your Google session expired. Please try signing in again."
+			}
+			httpx.RespondWithJSON(w, status, schemas.Message{Message: message})
 			return
 		}
 		completeGoogleLogin(w, r, s, claims.Firebase.Identities["google.com"][0], claims.Email, claims.Name)

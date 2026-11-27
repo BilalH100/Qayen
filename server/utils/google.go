@@ -17,6 +17,9 @@ import (
 	"time"
 )
 
+var ErrGoogleCertificatesUnavailable = errors.New("Google verification certificates unavailable")
+var ErrGoogleSigningKeyUnknown = errors.New("unknown Google signing key")
+
 type GoogleClaims struct {
 	jwt.RegisteredClaims
 	Email         string `json:"email"`
@@ -26,11 +29,12 @@ type GoogleClaims struct {
 }
 
 type GoogleVerifier struct {
-	Client  *http.Client
-	mu      sync.Mutex
-	keys    map[string]*rsa.PublicKey
-	expires time.Time
-	certURL string
+	Client         *http.Client
+	mu             sync.Mutex
+	keys           map[string]*rsa.PublicKey
+	expires        time.Time
+	certURL        string
+	lastKeyRefresh time.Time
 }
 
 func NewGoogleVerifier() *GoogleVerifier {
@@ -48,8 +52,12 @@ func (v *GoogleVerifier) key(ctx context.Context, token *jwt.Token) (interface{}
 		if key := v.keys[kid]; key != nil {
 			return key, nil
 		}
-		return nil, errors.New("unknown Google signing key")
+		// Refresh on rotation without letting random key IDs trigger unbounded fetches.
+		if time.Since(v.lastKeyRefresh) < 30*time.Second {
+			return nil, ErrGoogleSigningKeyUnknown
+		}
 	}
+	v.lastKeyRefresh = time.Now()
 	certURL := v.certURL
 	if certURL == "" {
 		certURL = "https://www.googleapis.com/oauth2/v1/certs"
@@ -58,17 +66,21 @@ func (v *GoogleVerifier) key(ctx context.Context, token *jwt.Token) (interface{}
 	if err != nil {
 		return nil, err
 	}
-	resp, err := v.Client.Do(req)
+	client := v.Client
+	if client == nil {
+		client = &http.Client{Timeout: 8 * time.Second}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: connection failed", ErrGoogleCertificatesUnavailable)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Google certificates unavailable")
+		return nil, fmt.Errorf("%w: HTTP %d", ErrGoogleCertificatesUnavailable, resp.StatusCode)
 	}
 	var certs map[string]string
 	if err = json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&certs); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: invalid response", ErrGoogleCertificatesUnavailable)
 	}
 	keys := make(map[string]*rsa.PublicKey)
 	for id, value := range certs {
@@ -85,7 +97,7 @@ func (v *GoogleVerifier) key(ctx context.Context, token *jwt.Token) (interface{}
 		}
 	}
 	if len(keys) == 0 {
-		return nil, errors.New("invalid Google certificates")
+		return nil, fmt.Errorf("%w: no usable keys", ErrGoogleCertificatesUnavailable)
 	}
 	cacheTime := 5 * time.Minute
 	for _, directive := range strings.Split(resp.Header.Get("Cache-Control"), ",") {
@@ -97,7 +109,7 @@ func (v *GoogleVerifier) key(ctx context.Context, token *jwt.Token) (interface{}
 	if key := keys[kid]; key != nil {
 		return key, nil
 	}
-	return nil, errors.New("unknown Google signing key")
+	return nil, ErrGoogleSigningKeyUnknown
 }
 
 func (v *GoogleVerifier) Verify(ctx context.Context, credential, audience, nonce string) (*GoogleClaims, error) {

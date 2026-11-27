@@ -1,5 +1,5 @@
 Pickup reservation testing
-==========================
+
 Patient: search a medication, receive an available pharmacy response, then confirm pickup. The requested quantity is held immediately for 5 minutes.
 
 In-app reminders appear at 3 and 4 minutes in the patient reservation panel, available on all pages while signed in. Browser notifications, emails and SMS are not sent. Returning to the app shows the current reminder/status.

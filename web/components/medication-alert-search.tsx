@@ -116,6 +116,7 @@ export default function MedicationAlertSearch() {
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
+        
         (position) => {
           setLocation({
             lat: position.coords.latitude,
